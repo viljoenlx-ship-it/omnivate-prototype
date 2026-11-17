@@ -125,24 +125,77 @@
       ctx.textAlign = "left";
     });
   }
-  function drawProductLabel(t, p) {
+  var LABEL_KEY = "omnivate.labels.v1";
+  function labelPrefix(t) {
+    if (t.id === "granite-warehouse") return "GW";
+    if (t.id === "top-quartz") return "TQ";
+    return String(t.id || "LB").replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "LB";
+  }
+  function readLabelStore() {
+    try { return JSON.parse(localStorage.getItem(LABEL_KEY) || "{}") || {}; } catch (e) { return {}; }
+  }
+  function assignCodes(t, specs) {
+    var all = readLabelStore();
+    var book = all[t.id];
+    if (!book || typeof book.next !== "number" || !book.pieces) book = { next: 1, pieces: {} };
+    var out = [];
+    specs.forEach(function (spec) {
+      var existing = book.pieces[spec.key];
+      if (existing) { out.push(existing); return; }
+      var code = spec.code;
+      if (!code) {
+        code = labelPrefix(t) + "-" + String(book.next).padStart(4, "0");
+        book.next += 1;
+      }
+      book.pieces[spec.key] = code;
+      out.push(code);
+    });
+    all[t.id] = book;
+    localStorage.setItem(LABEL_KEY, JSON.stringify(all));
+    t.labelSerial = { next: book.next, pieces: book.pieces };
+    if (window.Omnivate) window.Omnivate.persist();
+    return out.slice();
+  }
+  function auditCodes(codes) {
+    var seen = {};
+    var dups = [];
+    (codes || []).forEach(function (c) {
+      if (!c) return;
+      if (seen[c]) dups.push(c);
+      seen[c] = true;
+    });
+    var nums = (codes || []).map(function (c) {
+      var m = String(c).match(/(\d+)$/);
+      return m ? Number(m[1]) : NaN;
+    });
+    var consecutive = nums.length > 0 && nums.every(function (n, i) { return i === 0 || n === nums[i - 1] + 1; });
+    return { unique: dups.length === 0, consecutive: consecutive, dups: dups, codes: (codes || []).slice() };
+  }
+  function warnCodes(report) {
+    if (!report) return report;
+    if (!report.unique) O.toast("Duplicate label numbers: " + report.dups.join(", "), "err");
+    else if (report.codes.length > 1 && !report.consecutive) O.toast("Label numbers are not consecutive", "warn");
+    return report;
+  }
+  function drawProductLabel(t, p, code) {
     var size = geom();
+    var label = code || (p && p.sku) || "LABEL";
     return paintShifted(size, function (ctx, w, h) {
       ctx.fillStyle = "#000";
       ctx.font = "bold 22px sans-serif";
-      var price = size.showPrice ? zar2(p.sellIncl) : "";
+      var price = size.showPrice && p ? zar2(p.sellIncl) : "";
       var pw = price ? ctx.measureText(price).width + 8 : 0;
-      ctx.fillText(fit(ctx, p.name, w - 20 - pw), 8, 26);
+      ctx.fillText(fit(ctx, (p && p.name) || label, w - 20 - pw), 8, 26);
       if (price) {
         ctx.textAlign = "right";
         ctx.fillText(price, w - 8, 26);
         ctx.textAlign = "left";
       }
-      var bc = barcodeCanvas(p.sku, 2, Math.max(40, h - 78));
+      var bc = barcodeCanvas(label, 2, Math.max(40, h - 78));
       var bw = Math.min(bc.width, w - 16);
       ctx.drawImage(bc, 8, 36, bw, Math.max(40, h - 78));
-      ctx.font = "16px sans-serif";
-      ctx.fillText(p.sku, 8, h - 10);
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText(label, 8, h - 10);
     });
   }
   function drawOrderLabel(o) {
@@ -569,7 +622,7 @@
       wedge = [];
       return;
     }
-    if (isTyping(e.target)) { wedge = []; return; }
+    if (isTyping(e.target) && !(e.target.closest && e.target.closest("[data-scan-field]"))) { wedge = []; return; }
     var now = Date.now();
     if (e.key === "Enter") {
       if (wedge.length >= 4) {
@@ -590,7 +643,7 @@
   });
 
   function scanBar(hint) {
-    return '<div class="scan-bar"><input class="input" data-scan-field autocomplete="off" placeholder="Scan barcode, SKU or slab # then Enter" /><div class="tiny">' + hint + "</div></div>";
+    return '<div class="scan-bar"><div class="scan-row"><input class="input" data-scan-field inputmode="none" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Scan barcode, SKU or slab # then Enter"><button type="button" class="btn btn-secondary scan-kbd" data-act="scan-keyboard" aria-label="Type a code">Keyboard</button></div><div class="tiny">' + hint + "</div></div>";
   }
   function cameraBtn(t) {
     if (!cameraOn(t)) return "";
@@ -703,14 +756,32 @@
       "</tbody></table></div>";
   }
 
+  function slabHold(t, p) {
+    if ((Number(p.onHand) || 0) <= 0) return "sold";
+    var held = (t.books.quotes || []).some(function (q) {
+      return (q.status === "Draft" || q.status === "Sent") && (q.lines || []).some(function (l) { return l.productId === p.id; });
+    });
+    return held ? "reserved" : "free";
+  }
+  function quoteBadge(t) {
+    var q = (t.books.quotes || []).find(function (d) { return d.id === t.books.quoteFocus; });
+    if (!q) return "";
+    return '<a class="quote-badge" href="#/preview/' + t.id + "/work/quote/" + q.id + '">Quote ' + (q.lines || []).length + "</a>";
+  }
   function productRow(t, columns, p) {
+    var hold = slabHold(t, p);
+    var quoteBtn = hold === "free"
+      ? '<button class="btn btn-sm btn-primary" data-act="add-quote" data-id="' + t.id + '" data-sku="' + O.esc(p.id) + '">Add to quote</button>'
+      : '<button class="btn btn-sm btn-secondary" type="button" disabled>' + (hold === "sold" ? "Sold" : "Reserved") + "</button>";
     return '<tr class="' + (hit.kind === "product" && hit.id === p.id ? "scan-hit" : "") + '" data-product="' + O.esc(p.id) + '">' +
       '<td><input type="checkbox" class="pick-product" value="' + O.esc(p.id) + '" aria-label="Select ' + O.esc(p.sku) + '"></td>' +
       columns.map(function (c) {
-        var html = c.key === "name" ? (O.esc(p.name) + (low(p) ? ' <span class="badge badge-warning">Low stock</span>' : "")) : cell(p, c.key);
+        var html = c.key === "name" ? (O.esc(p.name) + (low(p) ? ' <span class="badge badge-warning">Low stock</span>' : "") + (hold === "sold" ? ' <span class="badge badge-neutral">Sold</span>' : hold === "reserved" ? ' <span class="badge badge-warning">Reserved</span>' : "")) : cell(p, c.key);
         return "<td" + (c.align ? ' class="' + c.align + '"' : "") + ">" + html + "</td>";
       }).join("") +
-      '<td><button class="btn btn-sm btn-secondary" data-act="print-product" data-id="' + t.id + '" data-sku="' + O.esc(p.sku) + '">Print label</button></td></tr>';
+      '<td><button class="btn btn-sm btn-secondary" data-act="slab-detail" data-id="' + t.id + '" data-sku="' + O.esc(p.id) + '">Details</button> ' +
+      quoteBtn +
+      ' <button class="btn btn-sm btn-secondary" data-act="print-product" data-id="' + t.id + '" data-sku="' + O.esc(p.sku) + '">Print label</button></td></tr>';
   }
 
   function docRow(t, columns, doc, kind) {
@@ -929,6 +1000,7 @@
   function products(t) {
     var columns = cols(t, "M29", "Item master", PRODUCT_MAP);
     return '<div class="page-head"><div><h1>Stock</h1><p>Prices include 15% VAT. Scan a SKU or barcode. Tick rows to print several labels.</p></div><div class="actions">' +
+      quoteBadge(t) +
       printerChip(t) +
       '<button class="btn btn-sm btn-primary" data-act="print-selected" data-id="' + t.id + '">Print selected labels</button>' + cameraBtn(t) + "</div></div>" +
       scanBar("Focus this box, or click the page background and scan. Enter looks the item up.") +
@@ -1390,7 +1462,7 @@
 
   function openCamera(t) {
     if (!cameraOn(t)) return;
-    O.openModal('<div class="modal-h"><h3>Scan by camera</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><video id="cam-video" autoplay playsinline muted style="width:100%;background:#0f172a;border-radius:8px"></video><p class="tiny" id="cam-status">Starting camera\u2026</p><div class="field"><label>Or type a code</label><input class="input" id="cam-manual" data-scan-field placeholder="SKU or slab #"></div></div><div class="modal-f"><button class="btn btn-secondary" data-act="close-modal">Close</button></div>');
+    O.openModal('<div class="modal-h"><h3>Scan by camera</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><video id="cam-video" autoplay playsinline muted style="width:100%;background:#0f172a;border-radius:8px"></video><p class="tiny" id="cam-status">Starting camera\u2026</p><div class="scan-row"><input class="input" id="cam-manual" data-scan-field inputmode="none" autocomplete="off" placeholder="SKU or slab #"><button type="button" class="btn btn-secondary scan-kbd" data-act="scan-keyboard">Keyboard</button></div></div><div class="modal-f"><button class="btn btn-secondary" data-act="close-modal">Close</button></div>');
     var video = document.getElementById("cam-video");
     var status = document.getElementById("cam-status");
     if (!navigator.mediaDevices || !window.BarcodeDetector) {
@@ -1427,6 +1499,72 @@
     if (O.parseHash().view === "preview") O.render({ keepScroll: true });
   });
 
+  function openSlabDetail(t, p) {
+    var hold = slabHold(t, p);
+    var action = hold === "free"
+      ? '<button class="btn btn-primary" type="button" data-act="add-quote" data-id="' + t.id + '" data-sku="' + O.esc(p.id) + '">Add to quote</button>'
+      : '<button class="btn btn-secondary" type="button" disabled>' + (hold === "sold" ? "Sold" : "Reserved on a quote") + "</button>";
+    O.openModal('<div class="modal-h"><h3>' + O.esc(p.sku) + '</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><p><strong>' + O.esc(p.name) + '</strong></p><p class="tiny">On hand ' + O.esc(p.onHand + " " + (p.uom || "")) + " · " + zar2(p.sellIncl) + " incl. VAT</p></div><div class=\"modal-f\">" + action + '<button class="btn btn-secondary" type="button" data-act="close-modal">Close</button></div>');
+  }
+  function openAddQuote(t, productId) {
+    var p = prod(t, productId);
+    if (!p) return;
+    var hold = slabHold(t, p);
+    if (hold !== "free") { O.toast(hold === "sold" ? "This slab is sold" : "This slab is already on a quote", "warn"); return; }
+    var drafts = (t.books.quotes || []).filter(function (q) { return q.status === "Draft" || q.status === "Sent"; });
+    var quoteOpts = drafts.map(function (q) {
+      var c = cust(t, q.customerId);
+      return '<option value="' + O.esc(q.id) + '">' + O.esc(q.number + " · " + (c ? c.name : "Quote") + " · " + (q.lines || []).length + " lines") + "</option>";
+    }).join("") + '<option value="new">New quote</option>';
+    var custOpts = (t.books.customers || []).map(function (c) {
+      return '<option value="' + O.esc(c.id) + '">' + O.esc(c.name) + "</option>";
+    }).join("");
+    O.openModal('<div class="modal-h"><h3>Add to quote</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><form class="modal-b" data-act="confirm-add-quote" data-id="' + t.id + '" data-sku="' + O.esc(p.id) + '"><p><strong>' + O.esc(p.name) + '</strong></p><p class="tiny">' + zar2(excl(p.sellIncl)) + " excl. VAT · 1 " + O.esc(p.uom || "slab") + '</p><div class="field"><label>Quote</label><select class="select" name="quote">' + quoteOpts + '</select></div><div class="field"><label>Customer</label><select class="select" name="customer">' + custOpts + '</select></div><p class="tiny">Customer is used when you start a new quote. An existing quote keeps its customer.</p><div class="modal-f" style="padding-left:0;padding-right:0"><button class="btn btn-primary" type="submit">Add slab</button></div></form>');
+  }
+  function toastQuote(t, q) {
+    O.toast("Added to " + q.number);
+    setTimeout(function () {
+      var spans = document.querySelectorAll("#toast-root .toast span");
+      var last = spans[spans.length - 1];
+      if (!last) return;
+      last.innerHTML = O.esc("Added to " + q.number) + ' · <a href="#/preview/' + t.id + "/work/quote/" + q.id + '" style="color:#fff;font-weight:700;text-decoration:underline">View quote</a>';
+    }, 0);
+  }
+  function addSlabToQuote(t, productId, quoteId, customerId) {
+    var p = prod(t, productId);
+    if (!p) return;
+    if (slabHold(t, p) !== "free") { O.toast("This slab is already reserved or sold", "warn"); return; }
+    var q = quoteId && quoteId !== "new" ? (t.books.quotes || []).find(function (d) { return d.id === quoteId; }) : null;
+    if (!q) {
+      q = {
+        id: O.uid("qt"),
+        number: nextNo(t, "quote"),
+        customerId: customerId || (t.books.customers[0] && t.books.customers[0].id),
+        date: new Date().toISOString().slice(0, 10),
+        status: "Draft",
+        lines: []
+      };
+      t.books.quotes.unshift(q);
+    }
+    if ((q.lines || []).some(function (l) { return l.productId === p.id; })) {
+      O.toast("That slab is already on " + q.number, "warn");
+      return;
+    }
+    q.lines = q.lines || [];
+    q.lines.push({ productId: p.id, qty: 1, price: excl(p.sellIncl) });
+    t.books.quoteFocus = q.id;
+    O.persist();
+    O.closeModal();
+    toastQuote(t, q);
+    O.render();
+  }
+  document.addEventListener("focusin", function (e) {
+    var el = e.target;
+    if (!el || !el.hasAttribute || !el.hasAttribute("data-scan-field")) return;
+    if (el.getAttribute("inputmode") === "text") return;
+    el.setAttribute("readonly", "readonly");
+    setTimeout(function () { el.removeAttribute("readonly"); }, 80);
+  });
   O.ext.preview = function () {
     var parts = routeParts();
     if (parts[0] !== "preview") return false;
@@ -1448,7 +1586,7 @@
       if (cameraOn(ts)) { openCamera(ts); return true; }
       var field = document.querySelector(".preview-body [data-scan-field]");
       if (!field) {
-        O.openModal('<div class="modal-h"><h3>Scan</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><p class="tiny">Camera scan is off. Type a code, or use a handheld scanner.</p><input class="input" id="phone-scan-input" data-scan-field placeholder="SKU, barcode or slab #"></div><div class="modal-f"><button class="btn btn-primary" type="button" data-act="close-modal">Done</button></div>');
+        O.openModal('<div class="modal-h"><h3>Scan</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><p class="tiny">Camera scan is off. The field stays open for a handheld scanner and does not open the phone keyboard.</p><div class="scan-row"><input class="input" id="phone-scan-input" data-scan-field inputmode="none" autocomplete="off" placeholder="SKU, barcode or slab #"><button type="button" class="btn btn-secondary scan-kbd" data-act="scan-keyboard">Keyboard</button></div></div><div class="modal-f"><button class="btn btn-primary" type="button" data-act="close-modal">Done</button></div>');
         var typed = document.getElementById("phone-scan-input");
         if (typed) typed.focus();
         return true;
@@ -1479,10 +1617,13 @@
       var ts = O.getTenant(id); ensureBooks(ts);
       var ids = Array.prototype.map.call(document.querySelectorAll(".pick-product:checked"), function (box) { return box.value; });
       if (!ids.length) { O.toast("Tick at least one product", "warn"); return true; }
-      var items = ids.map(function (pid) {
-        var p = prod(ts, pid);
-        return { title: p.sku + " · " + p.name, url: drawProductLabel(ts, p).toDataURL("image/png"), copies: 1 };
+      var specs = ids.map(function (pid) { return { key: "sku:" + pid }; });
+      var codes = assignCodes(ts, specs);
+      var items = codes.map(function (code, i) {
+        var p = prod(ts, ids[i]);
+        return { title: code + " · " + (p ? p.sku : ids[i]), code: code, url: drawProductLabel(ts, p, code).toDataURL("image/png"), copies: 1 };
       });
+      warnCodes(auditCodes(codes));
       window.OmnivatePrint.openReview("Print selected labels", items);
       return true;
     }
@@ -1490,10 +1631,22 @@
       var tg = O.getTenant(id); ensureBooks(tg);
       var grv = (tg.books.grvs || []).find(function (g) { return g.id === el.getAttribute("data-grv"); });
       if (!grv) return true;
-      var batch = grv.lines.map(function (l) {
-        var p = prod(tg, l.productId);
-        return { title: (p ? p.sku : l.productId) + " · received " + l.qty, url: drawProductLabel(tg, p).toDataURL("image/png"), copies: l.qty || 1 };
-      }).filter(function (x) { return x.url; });
+      var specs = [];
+      var pieces = [];
+      (grv.lines || []).forEach(function (l, li) {
+        var qty = Math.max(0, l.qty | 0);
+        for (var u = 0; u < qty; u++) {
+          specs.push({ key: "grv:" + grv.id + ":" + li + ":" + u });
+          pieces.push(l.productId);
+        }
+      });
+      if (!specs.length) { O.toast("This receipt has no units", "warn"); return true; }
+      var codes = assignCodes(tg, specs);
+      var batch = codes.map(function (code, i) {
+        var p = prod(tg, pieces[i]);
+        return { title: code + " · " + (p ? p.sku : pieces[i]), code: code, url: drawProductLabel(tg, p, code).toDataURL("image/png"), copies: 1 };
+      });
+      warnCodes(auditCodes(codes));
       window.OmnivatePrint.openReview(grv.number + " labels", batch);
       return true;
     }
@@ -1505,13 +1658,45 @@
     if (act === "print-product") {
       var t = O.getTenant(id); ensureBooks(t);
       var p = prod(t, el.getAttribute("data-sku"));
-      if (p) printCanvas(drawProductLabel(t, p));
+      if (p) {
+        var one = assignCodes(t, [{ key: "sku:" + p.id }])[0];
+        printCanvas(drawProductLabel(t, p, one));
+      }
       return true;
     }
     if (act === "print-order") {
       var tg = O.getTenant(id); ensureBooks(tg);
       var o = (tg.books.orders || []).find(function (x) { return x.id === el.getAttribute("data-order"); });
-      if (o) printCanvas(drawOrderLabel(o));
+      if (o) {
+        if (!o.slab) {
+          o.slab = assignCodes(tg, [{ key: "order:" + o.id }])[0];
+          O.persist();
+        } else {
+          assignCodes(tg, [{ key: "order:" + o.id, code: o.slab }]);
+        }
+        printCanvas(drawOrderLabel(o));
+      }
+      return true;
+    }
+    if (act === "scan-keyboard") {
+      var row = el.closest(".scan-bar") || el.closest(".modal") || document;
+      var field = row.querySelector("[data-scan-field]");
+      if (!field) return true;
+      var typing = field.getAttribute("inputmode") === "text";
+      field.setAttribute("inputmode", typing ? "none" : "text");
+      el.textContent = typing ? "Keyboard" : "Scanner";
+      field.focus();
+      return true;
+    }
+    if (act === "slab-detail") {
+      var td = O.getTenant(id); ensureBooks(td);
+      var pd = prod(td, el.getAttribute("data-sku"));
+      if (pd) openSlabDetail(td, pd);
+      return true;
+    }
+    if (act === "add-quote") {
+      var tq = O.getTenant(id); ensureBooks(tq);
+      openAddQuote(tq, el.getAttribute("data-sku"));
       return true;
     }
     if (act === "scan-camera") {
@@ -1574,6 +1759,14 @@
     return false;
   };
   O.ext.submit = function (act, form) {
+    if (act === "confirm-add-quote") {
+      var tq = O.getTenant(form.getAttribute("data-id"));
+      ensureBooks(tq);
+      var quoteId = form.elements.quote ? form.elements.quote.value : "new";
+      var customerId = form.elements.customer ? form.elements.customer.value : "";
+      addSlabToQuote(tq, form.getAttribute("data-sku"), quoteId, customerId);
+      return true;
+    }
     if (act === "save-grv") {
       var tg = O.getTenant(form.getAttribute("data-id"));
       ensureBooks(tg);
@@ -1656,7 +1849,10 @@
     });
   }
   window.OmnivatePhone = { dress: dressPhone };
-  window.OmnivateLabels = { geom: geom, drawTest: drawTest, findCode: findCode, cameraOn: cameraOn };
+  window.OmnivateLabels = {
+    geom: geom, drawTest: drawTest, findCode: findCode, cameraOn: cameraOn,
+    drawProductLabel: drawProductLabel, assignCodes: assignCodes, auditCodes: auditCodes
+  };
   window.OmnivateDocs = {
     render: renderBizDoc,
     open: openPrint,

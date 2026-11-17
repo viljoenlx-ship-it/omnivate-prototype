@@ -1202,7 +1202,9 @@
   function openModal(html) {
     const root = document.getElementById("modal-root");
     root.innerHTML = `<div class="modal-backdrop" data-act="close-modal"><div class="modal" onclick="event.stopPropagation()">${html}</div></div>`;
-    const first = root.querySelector("input,select,textarea,button:not(.icon-btn)");
+    const scan = root.querySelector("[data-scan-field]");
+    const desktop = window.matchMedia("(min-width: 901px)").matches;
+    const first = scan || (desktop ? root.querySelector("input,select,textarea,button:not(.icon-btn)") : null);
     if (first) setTimeout(() => first.focus(), 30);
   }
   function closeModal() {

@@ -406,7 +406,7 @@
     return '<p class="tiny">Each slab is blockID-n. Print uses the M2-H 50×15 mm label (591×177 px unless you changed Label size). A handheld scan of that code advances the block.</p>' + blocks;
   }
 
-  function drawSlab(t, block, n) {
+  function drawSlab(t, block, code) {
     var size = window.OmnivateLabels.geom();
     var c = document.createElement("canvas");
     c.width = size.w_px;
@@ -421,12 +421,11 @@
     ctx.fillText(block.material, 8, 26);
     ctx.font = "18px sans-serif";
     ctx.fillText(block.L + " × " + block.W + " × " + block.H + " cm", 8, 48);
-    var code = block.blockId + "-" + n;
     var bc = document.createElement("canvas");
-    window.JsBarcode(bc, code, { format: "CODE128", displayValue: false, margin: 0, width: 2, height: Math.max(40, c.height - 90), background: "#fff", lineColor: "#000" });
+    window.JsBarcode(bc, String(code), { format: "CODE128", displayValue: false, margin: 0, width: 2, height: Math.max(40, c.height - 90), background: "#fff", lineColor: "#000" });
     ctx.drawImage(bc, 8, 56, Math.min(bc.width, c.width - 16), Math.max(40, c.height - 90));
-    ctx.font = "16px sans-serif";
-    ctx.fillText(code, 8, c.height - 10);
+    ctx.font = "bold 18px sans-serif";
+    ctx.fillText(String(code), 8, c.height - 10);
     ctx.restore();
     return c;
   }
@@ -870,19 +869,28 @@
       }
       if (act === "print-block-labels" && t) {
         var whole = blockOf(t, el.getAttribute("data-block"));
-        if (whole && window.OmnivatePrint) {
+        if (whole && window.OmnivatePrint && window.OmnivateLabels) {
           var count = Math.max(1, cutsFor(t, whole.blockId).reduce(function (s, c) { return s + (c.qty || 0); }, 0) || 4);
-          var batch = [];
-          for (var n = 1; n <= Math.min(count, 24); n++) {
-            batch.push({ title: whole.blockId + "-" + n, url: drawSlab(t, whole, n).toDataURL("image/png"), copies: 1 });
-          }
+          count = Math.min(count, 24);
+          var specs = [];
+          for (var n = 1; n <= count; n++) specs.push({ key: "block:" + whole.blockId + ":" + n, code: whole.blockId + "-" + n });
+          var codes = window.OmnivateLabels.assignCodes(t, specs);
+          var batch = codes.map(function (code) {
+            return { title: code, code: code, url: drawSlab(t, whole, code).toDataURL("image/png"), copies: 1 };
+          });
+          var report = window.OmnivateLabels.auditCodes(codes);
+          if (!report.unique) O.toast("Duplicate slab numbers: " + report.dups.join(", "), "err");
           window.OmnivatePrint.openReview(whole.blockId + " slabs", batch);
         }
         return true;
       }
       if (act === "print-slab" && t) {
         var block = blockOf(t, el.getAttribute("data-block"));
-        if (block) sendLabel(drawSlab(t, block, el.getAttribute("data-n")));
+        if (block && window.OmnivateLabels) {
+          var n = Number(el.getAttribute("data-n")) || 1;
+          var code = window.OmnivateLabels.assignCodes(t, [{ key: "block:" + block.blockId + ":" + n, code: block.blockId + "-" + n }])[0];
+          sendLabel(drawSlab(t, block, code));
+        }
         return true;
       }
       if (act === "print-job" && t) {

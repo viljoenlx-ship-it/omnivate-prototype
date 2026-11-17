@@ -182,12 +182,15 @@
 
   function openReview(title, items) {
     var O = window.Omnivate;
+    var codes = items.map(function (it) { return it.code; }).filter(Boolean);
+    var audit = window.OmnivateLabels && codes.length ? window.OmnivateLabels.auditCodes(codes) : { unique: true, consecutive: true, dups: [] };
+    var warn = !audit.unique ? '<p class="tiny" style="color:#b91c1c">Duplicate numbers in this batch: ' + O.esc(audit.dups.join(", ")) + "</p>" : "";
     var rows = items.map(function (it, i) {
-      return '<div class="queue-row"><img alt="" src="' + it.url + '" style="width:160px;height:auto;background:#fff;border:1px solid var(--border)"><div><strong>' + O.esc(it.title) + '</strong><div class="field"><label>Labels</label><input class="input queue-qty" data-i="' + i + '" type="number" min="0" value="' + (it.copies || 1) + '"></div></div></div>';
+      return '<div class="queue-row"><img alt="' + O.esc(it.code || it.title) + '" src="' + it.url + '" style="width:min(100%,280px);height:auto;background:#fff;border:1px solid var(--border)"><div><strong>' + O.esc(it.title) + '</strong><div class="field"><label>Copies of this number</label><input class="input queue-qty" data-i="' + i + '" type="number" min="0" value="' + (it.copies || 1) + '"></div></div></div>';
     }).join("");
     O.openModal(
       '<div class="modal-h"><h3>' + O.esc(title) + '</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + "</button></div>" +
-      '<div class="modal-b"><p class="tiny">Review how many labels to print for each line. Same artwork uses one Niimbot job with copies. Different labels print one after another so you can pause.</p>' +
+      '<div class="modal-b"><p class="tiny">Each slab already has its own number. Copies above 1 would repeat that number, so leave them at 1.</p>' + warn +
       '<div class="queue-list">' + rows + "</div>" +
       '<div class="prog" style="margin-top:12px"><span id="queue-bar" style="width:0%"></span></div>' +
       '<div class="tiny" id="queue-msg">Ready · ' + items.length + " line" + (items.length === 1 ? "" : "s") + "</div></div>" +
@@ -211,7 +214,8 @@
       var live = items.map(function (it, i) {
         var input = document.querySelector('.queue-qty[data-i="' + i + '"]');
         var copies = input ? Number(input.value) : it.copies;
-        return { title: it.title, url: it.url, copies: copies };
+        if (it.code && copies > 1) copies = 1;
+        return { title: it.title, code: it.code, url: it.url, copies: copies };
       }).filter(function (it) { return it.copies > 0; });
       if (!live.length) { O.toast("Nothing to print", "warn"); return; }
       go.disabled = true;
