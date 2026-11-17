@@ -1002,10 +1002,48 @@ tr.scan-hit { background: #F0FDFA; outline: 2px solid #14B8A6; }
 @media (max-width: 800px) { .clock-row { grid-template-columns: 1fr 1fr; } .kanban-col { min-width: 78vw; } }
 @media print {
   body.printing-doc > *:not(#doc-print-root) { display: none !important; }
-  body.printing-doc #doc-print-root { display: block !important; }
-  #doc-print-root .paper { font-family: Inter, sans-serif; color: #111; }
-  #theme-toggle { display: none !important; }
+  body.printing-doc #doc-print-root { display: block !important; background: #fff !important; }
+  body.printing-doc { background: #fff !important; }
+  #doc-print-root .paper, #doc-print-root .biz-doc { font-family: Inter, sans-serif; color: #111; }
+  #doc-print-root .biz-doc { width: auto; max-width: none; margin: 0; padding: 0; box-shadow: none; }
 }
+@page { size: A4; margin: 12mm; }
+.biz-preview-h { font-size: 15px; margin: 18px 0 8px; }
+.biz-preview { background: #eef2f4; border-radius: 16px; padding: 16px; overflow: auto; }
+.biz-doc {
+  --brand: #3B2F8F;
+  width: 186mm; max-width: 100%; margin: 0 auto; background: #fff; color: #1c1917;
+  padding: 12mm; box-sizing: border-box; font-family: Inter, sans-serif; font-size: 11px; line-height: 1.4;
+}
+.biz-preview .biz-doc { box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12); }
+.biz-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding-bottom: 10px; border-bottom: 3px solid var(--brand); }
+.biz-logo { max-height: 68px; max-width: 240px; width: auto; height: auto; object-fit: contain; display: block; }
+.biz-word { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; color: var(--brand); }
+.biz-co { text-align: right; font-size: 10.5px; color: #44403c; }
+.biz-co strong { display: block; color: #1c1917; font-size: 12px; margin-bottom: 2px; }
+.biz-title { display: flex; justify-content: space-between; gap: 16px; margin: 12px 0; align-items: flex-start; }
+.biz-docname { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; color: var(--brand); text-transform: uppercase; }
+.biz-num { font-size: 14px; font-weight: 700; margin-top: 2px; }
+.biz-meta { border-collapse: collapse; font-size: 11px; }
+.biz-meta th { text-align: left; color: #78716c; font-weight: 600; padding: 1px 10px 1px 0; }
+.biz-meta td { text-align: right; font-weight: 650; }
+.biz-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.biz-party { border: 1px solid #e7e5e4; border-radius: 8px; padding: 8px 10px; min-height: 72px; }
+.biz-k { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand); font-weight: 700; margin-bottom: 3px; }
+.biz-lines { width: 100%; border-collapse: collapse; }
+.biz-lines th { text-align: left; font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #fff; background: var(--brand); padding: 6px 8px; }
+.biz-lines td { padding: 6px 8px; border-bottom: 1px solid #e7e5e4; vertical-align: top; }
+.biz-lines tr:nth-child(even) td { background: #fafaf9; }
+.biz-lines .num, .biz-doc .num { text-align: right; white-space: nowrap; }
+.biz-detail { color: #78716c; font-size: 10px; }
+.biz-totals { width: 220px; margin-left: auto; margin-top: 8px; }
+.biz-totals div { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
+.biz-totals .grand { border-top: 2px solid var(--brand); margin-top: 4px; padding-top: 6px; font-size: 13px; }
+.biz-bank { margin-top: 12px; padding: 8px 10px; border: 1px dashed #d6d3d1; border-radius: 8px; background: #fffbeb; }
+.biz-example { display: inline-block; margin: 2px 0 4px; padding: 1px 8px; border-radius: 999px; background: #f59e0b; color: #1c1917; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.biz-note { margin-top: 8px; color: #44403c; }
+.biz-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 14px; padding-top: 8px; border-top: 1px solid #e7e5e4; color: #57534e; font-size: 9.5px; }
+.biz-page { white-space: nowrap; font-weight: 700; color: #1c1917; }
 
 /* ========== Visual refresh ========== */
 :root {

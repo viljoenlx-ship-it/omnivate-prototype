@@ -1671,6 +1671,22 @@
             </label>`).join("")}
         </div>
       </div>
+      <h2 style="font-size:15px;margin:18px 0 8px">Business details</h2>
+      <p class="tiny" style="margin-bottom:12px">Printed on quotes, invoices, sales orders, goods received notes, delivery notes and job cards for this tenant. Logo, address and VAT number above are used as they stand. Bank details stay marked as an example until you untick that box.</p>
+      <div class="form-grid">
+        <div class="field"><label>Document colour</label><input class="input" name="brandColor" type="text" value="${esc((p.business || {}).brandColor || t.color || "")}" placeholder="#9B1B2E" /></div>
+        <div class="field"><label>Bank (example until you change it)</label><input class="input" name="bankName" value="${esc((p.business || {}).bankName || "")}" /></div>
+        <div class="field"><label>Account name</label><input class="input" name="accountName" value="${esc((p.business || {}).accountName || "")}" /></div>
+        <div class="field"><label>Account number</label><input class="input" name="accountNumber" value="${esc((p.business || {}).accountNumber || "")}" /></div>
+        <div class="field"><label>Branch code</label><input class="input" name="branchCode" value="${esc((p.business || {}).branchCode || "")}" /></div>
+        <div class="field" style="justify-content:flex-end">
+          <label class="switch-label" style="display:flex;align-items:center;gap:10px">
+            <label class="switch"><input type="checkbox" name="bankIsExample" ${(p.business || {}).bankIsExample !== false ? "checked" : ""} /><span></span></label>
+            Mark banking details as an example
+          </label>
+        </div>
+        <div class="field span-2"><label>Document footer</label><textarea class="textarea" name="docFooter" rows="3">${esc((p.business || {}).footer || "")}</textarea></div>
+      </div>
       <h2 style="font-size:15px;margin:8px 0 12px">Terminology overrides</h2>
       <div class="form-grid">
         ${["Customer", "Supplier", "Item", "Employee"].map((k) => `
@@ -3728,7 +3744,15 @@
         ["invoices", "payments", "approvals", "backups", "marketing"].forEach((k) => {
           x.whatsapp[k] = chk("wa_" + k);
         });
-      }, { tenantId: id, action: "Branding updated", target: "Trading name", before: (getTenant(id) && getTenant(id).tradingAs) || "\u2014", after: val("tradingAs") || "\u2014" });
+        p.business = p.business || {};
+        p.business.brandColor = val("brandColor") || p.business.brandColor || x.color;
+        p.business.bankName = val("bankName");
+        p.business.accountName = val("accountName");
+        p.business.accountNumber = val("accountNumber");
+        p.business.branchCode = val("branchCode");
+        p.business.bankIsExample = chk("bankIsExample");
+        p.business.footer = val("docFooter");
+      }, { tenantId: id, action: "Business details updated", target: "Documents", before: "Previous footer and bank details", after: val("docFooter") ? "Footer and bank details saved" : "Cleared" });
       toast("Company settings saved", "ok");
       render({ keepScroll: true });
     }

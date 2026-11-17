@@ -335,7 +335,7 @@
 
   function blocksView(t) {
     var rows = t.books.production.blocks.map(function (b) {
-      return "<tr><td>" + esc(b.date) + "</td><td>" + esc(custName(t, b.customerId)) + "</td><td>" + esc(quarryName(b.quarry)) + "</td><td>" + esc(b.material) + "</td><td class=\"mono\">" + esc(b.blockId) + "</td><td>" + esc(b.orderNo) + "</td><td>" + b.L + "×" + b.W + "×" + b.H + "</td><td>" + b.m3 + "</td><td>" + b.tons + "</td><td>" + zar2(b.m3Cost) + "</td><td>" + zar2(b.blockCost) + "</td><td>" + esc(b.dateCollected || "—") + "</td><td>" + esc(b.truck || "—") + "</td><td>" + esc(b.deliveryNote || "—") + "</td><td>" + esc(b.location) + "</td><td><span class=\"badge badge-teal\">" + esc(b.status) + "</span></td></tr>";
+      return "<tr><td>" + esc(b.date) + "</td><td>" + esc(custName(t, b.customerId)) + "</td><td>" + esc(quarryName(b.quarry)) + "</td><td>" + esc(b.material) + "</td><td class=\"mono\">" + esc(b.blockId) + "</td><td>" + esc(b.orderNo) + "</td><td>" + b.L + "×" + b.W + "×" + b.H + "</td><td>" + b.m3 + "</td><td>" + b.tons + "</td><td>" + zar2(b.m3Cost) + "</td><td>" + zar2(b.blockCost) + "</td><td>" + esc(b.dateCollected || "—") + "</td><td>" + esc(b.truck || "—") + "</td><td>" + (b.deliveryNote ? '<button class="btn btn-sm btn-secondary" data-act="print-block-dn" data-id="' + t.id + '" data-block="' + esc(b.blockId) + '">' + esc(b.deliveryNote) + "</button>" : "—") + "</td><td>" + esc(b.location) + "</td><td><span class=\"badge badge-teal\">" + esc(b.status) + "</span></td></tr>";
     }).join("");
     return '<p class="tiny">m³ = L×W×H / 1,000,000. Tons = m³ × 3.65. Block cost = m³ × m³ cost. Dimensions are centimetres.</p>' +
       '<div class="table-wrap"><table class="data"><thead><tr><th>Date</th><th>Customer</th><th>Quarry</th><th>Material</th><th>Block</th><th>Order</th><th>L×W×H</th><th>m³</th><th>Tons</th><th>m³ cost</th><th>Block cost</th><th>Collected</th><th>Truck</th><th>Del. note</th><th>Location</th><th>Status</th></tr></thead><tbody>' + rows + "</tbody></table></div>";
@@ -440,17 +440,34 @@
   }
 
   function printJob(t, job) {
-    var root = document.getElementById("doc-print-root");
-    if (!root) return;
-    root.innerHTML = '<article class="paper"><h1>Job card</h1><p>' + esc(t.tradingAs || t.name) + "</p><table>" +
-      "<tr><td>Date</td><td>" + esc(job.date) + "</td></tr><tr><td>SO</td><td>" + esc(job.soNumber) + "</td></tr>" +
-      "<tr><td>Source slab</td><td>" + esc(job.slabNo) + "</td></tr><tr><td>Machine</td><td>" + esc(job.machine) + "</td></tr>" +
-      "<tr><td>Type</td><td>" + esc(job.type) + "</td></tr><tr><td>Size</td><td>" + job.L + " × " + job.W + " × " + job.T + "</td></tr>" +
-      "<tr><td>Qty</td><td>" + job.qty + "</td></tr><tr><td>Grade</td><td>" + esc(job.grade) + "</td></tr>" +
-      "<tr><td>m² / m³</td><td>" + job.m2 + " / " + job.m3 + "</td></tr><tr><td>Waste</td><td>" + job.waste + "%</td></tr></table></article>";
-    document.body.classList.add("printing-doc");
-    window.print();
-    document.body.classList.remove("printing-doc");
+    if (!window.OmnivateDocs) return;
+    window.OmnivateDocs.open(window.OmnivateDocs.render(t, window.OmnivateDocs.jobSpec(t, job)));
+  }
+  function printBlockNote(t, block) {
+    if (!window.OmnivateDocs || !block || !block.deliveryNote) return;
+    window.OmnivateDocs.open(window.OmnivateDocs.render(t, {
+      title: "Delivery note",
+      number: block.deliveryNote,
+      date: block.dateCollected || block.date,
+      untilLabel: "Block order",
+      until: block.orderNo,
+      reference: block.blockId,
+      status: block.status,
+      billLabel: "Customer",
+      bill: (function () {
+        var c = (t.books.customers || []).find(function (x) { return x.id === block.customerId; });
+        return c ? { name: c.name, lines: [c.address || "", c.city || "", "Sample account — invented for this demo"].filter(Boolean) } : { name: "Sample account", lines: [] };
+      })(),
+      shipLabel: "Collected from",
+      ship: { name: quarryName(block.quarry), lines: [block.truck ? "Truck " + block.truck : "", "Yard location " + (block.location || "")] .filter(Boolean) },
+      lines: [{
+        description: block.material + " block " + block.blockId,
+        detail: block.L + " × " + block.W + " × " + block.H + " cm · " + block.m3 + " m³ · " + block.tons + " t",
+        qty: 1,
+        unit: "block",
+        price: block.blockCost
+      }]
+    }));
   }
 
   function nightHours(start, end, ns, ne) {
@@ -868,6 +885,11 @@
       if (act === "print-job" && t) {
         var job = (t.books.production.jobs || []).find(function (j) { return j.id === el.getAttribute("data-job"); });
         if (job) printJob(t, job);
+        return true;
+      }
+      if (act === "print-block-dn" && t) {
+        var noted = blockOf(t, el.getAttribute("data-block"));
+        if (noted) printBlockNote(t, noted);
         return true;
       }
       if (act === "time-week") {

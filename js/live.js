@@ -790,7 +790,9 @@
             }
             return "<td>" + O.esc(v[c.key] == null ? "" : v[c.key]) + "</td>";
           }).join("") +
-          '<td><button class="btn btn-sm btn-secondary" data-act="print-order" data-id="' + t.id + '" data-order="' + o.id + '">Print label</button></td></tr>';
+          '<td><button class="btn btn-sm btn-secondary" data-act="print-sales-order" data-id="' + t.id + '" data-order="' + o.id + '">Order</button> ' +
+          '<button class="btn btn-sm btn-secondary" data-act="print-delivery" data-id="' + t.id + '" data-order="' + o.id + '">Delivery note</button> ' +
+          '<button class="btn btn-sm btn-secondary" data-act="print-order" data-id="' + t.id + '" data-order="' + o.id + '">Label</button></td></tr>';
       }).join("") +
       "</tbody></table></div>";
   }
@@ -949,8 +951,9 @@
       '<button class="btn btn-primary" type="submit">Save ' + title.toLowerCase() + "</button>" +
       (kind === "quote" && draft.id ? '<button class="btn btn-secondary" type="button" data-act="convert-quote" data-id="' + t.id + '" data-q="' + draft.id + '">Convert to invoice</button>' : "") +
       (draft.id ? '<button class="btn btn-secondary" type="button" data-act="wa-doc" data-id="' + t.id + '" data-kind="' + kind + '" data-doc="' + draft.id + '">Send via WhatsApp</button>' : "") +
-      (draft.id ? '<button class="btn btn-secondary" type="button" data-act="pdf-doc" data-id="' + t.id + '" data-kind="' + kind + '" data-doc="' + draft.id + '">Download PDF</button>' : "") +
-      "</div></form>";
+      (draft.id ? '<button class="btn btn-secondary" type="button" data-act="pdf-doc" data-id="' + t.id + '" data-kind="' + kind + '" data-doc="' + draft.id + '">Print / Save as PDF</button>' : "") +
+      "</div></form>" +
+      (draft.id ? '<h2 class="biz-preview-h">Print preview</h2><div class="biz-preview" id="biz-preview">' + renderBizDoc(t, salesDocSpec(t, draft, kind)) + "</div>" : "");
   }
 
   function grvView(t) {
@@ -958,6 +961,7 @@
     var rows = (t.books.grvs || []).map(function (g) {
       var qty = g.lines.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
       return "<tr><td class=\"mono\">" + O.esc(g.number) + "</td><td>" + O.esc(g.date) + "</td><td>" + O.esc(g.supplier) + "</td><td>" + g.lines.length + "</td><td>" + qty + "</td><td>" + (g.posted ? "Posted" : "Draft") + "</td><td>" +
+        '<button class="btn btn-sm btn-secondary" data-act="print-grv-doc" data-id="' + t.id + '" data-grv="' + O.esc(g.id) + '">Print GRV</button> ' +
         '<button class="btn btn-sm btn-primary" data-act="print-grv" data-id="' + t.id + '" data-grv="' + O.esc(g.id) + '">Print all labels</button></td></tr>';
     }).join("");
     var opts = t.books.products.map(function (p) { return '<option value="' + O.esc(p.id) + '">' + O.esc(p.sku + " · " + p.name) + "</option>"; }).join("");
@@ -1109,21 +1113,230 @@
     window.open(url, "_blank", "noopener");
     O.pushAudit({ tenantId: t.id, action: "WhatsApp opened", target: doc.number, before: "\u2014", after: n });
   }
-  function printDoc(t, doc) {
-    var tot = docTotals(doc.lines);
-    var c = cust(t, doc.customerId);
+  var PUBLIC_BUSINESS = {
+    "granite-warehouse": {
+      legalName: "The Granite Warehouse (Pty) Ltd",
+      phone: "012 256 4599",
+      email: "info@thegranitewarehouse.co.za",
+      website: "https://thegranitewarehouse.co.za/",
+      address1: "Erf 1059 of the farm Hartbeespoort",
+      address2: "Kareepoort",
+      city: "Brits",
+      postal: "0250",
+      province: "North West",
+      logo: "assets/tenants/tgw-logo.png",
+      brandColor: "#9B1B2E",
+      footer: "Wholesale slabs from our factory in Kareepoort, Brits. Goods remain the property of The Granite Warehouse (Pty) Ltd until paid in full. E&OE. The banking details on this document are an example for the demo."
+    },
+    "top-quartz": {
+      phone: "011 452 1121",
+      email: "sales@topquartz.co.za",
+      website: "https://www.topquartz.co.za/",
+      logo: "assets/tenants/tq-logo.png",
+      brandColor: "#0E7A4A",
+      footer: "Quartz, granite and porcelain slabs, cut to size. Goods remain the property of Top Quartz until paid in full. E&OE. The banking details on this document are an example for the demo."
+    }
+  };
+  function blank(v) { return v == null || String(v).trim() === ""; }
+  function ensureBusiness(t) {
+    if (!t) return false;
+    var spec = PUBLIC_BUSINESS[t.id];
+    t.profile = t.profile || {};
+    var p = t.profile;
+    p.business = p.business || {};
+    var b = p.business;
+    var changed = false;
+    if (spec) {
+      ["phone", "email", "website"].forEach(function (k) {
+        if (blank(p[k]) && spec[k]) { p[k] = spec[k]; changed = true; }
+      });
+      if (blank(p.address1) && spec.address1) {
+        ["address1", "address2", "city", "postal", "province"].forEach(function (k) { if (spec[k]) p[k] = spec[k]; });
+        changed = true;
+      }
+      if (spec.legalName && p.legalName === "The Granite Warehouse" && blank(p.registrationNumber) && p.address1 === spec.address1) {
+        p.legalName = spec.legalName;
+        t.name = spec.legalName;
+        changed = true;
+      }
+      if (!t.logoData && spec.logo) { t.logoData = spec.logo; changed = true; }
+      if (blank(b.brandColor) && spec.brandColor) { b.brandColor = spec.brandColor; changed = true; }
+      if (blank(b.footer) && spec.footer) { b.footer = spec.footer; changed = true; }
+    }
+    if (blank(b.bankName)) { b.bankName = "Example Bank"; changed = true; }
+    if (blank(b.accountName)) { b.accountName = t.tradingAs || t.name || ""; changed = true; }
+    if (blank(b.accountNumber)) { b.accountNumber = "000 000 0000"; changed = true; }
+    if (blank(b.branchCode)) { b.branchCode = "000000"; changed = true; }
+    if (typeof b.bankIsExample !== "boolean") { b.bankIsExample = true; changed = true; }
+    if (blank(b.footer)) { b.footer = "Goods remain our property until paid in full. E&OE. Banking details are an example."; changed = true; }
+    if (blank(b.brandColor)) { b.brandColor = t.color || "#3B2F8F"; changed = true; }
+    return changed;
+  }
+  function applyBusinessDefaults() {
+    var state = O.getState();
+    if (!state || !state.tenants) return;
+    var changed = false;
+    state.tenants.forEach(function (t) { if (ensureBusiness(t)) changed = true; });
+    if (changed) O.persist();
+  }
+  function plusDays(iso, n) {
+    var d = new Date(String(iso || "") + "T00:00:00Z");
+    if (isNaN(d.getTime())) return "";
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function partyFromCustomer(t, id) {
+    var c = cust(t, id);
+    if (!c) return { name: "Sample account", lines: ["Invented for this demo"] };
+    return { name: c.name, lines: [c.address || "", c.city || "", "Sample account — invented for this demo"].filter(function (x) { return x; }) };
+  }
+  function yardParty(t) {
+    ensureBusiness(t);
+    var p = t.profile;
+    return {
+      name: p.tradingAs || t.tradingAs || t.name,
+      lines: [p.address1, p.address2, [p.city, p.postal].filter(Boolean).join(" "), p.province].filter(function (x) { return x && String(x).trim(); })
+    };
+  }
+  function metaRow(k, v) {
+    if (!v) return "";
+    return "<tr><th>" + O.esc(k) + "</th><td>" + O.esc(v) + "</td></tr>";
+  }
+  function renderBizDoc(t, spec) {
+    ensureBusiness(t);
+    var p = t.profile;
+    var b = p.business;
+    var color = b.brandColor || t.color || "#3B2F8F";
+    var lines = spec.lines || [];
+    var showMoney = spec.showMoney !== false;
+    var sub = round2(lines.reduce(function (s, l) {
+      if (l.amount != null && l.amount !== "") return s + Number(l.amount);
+      if (l.price == null || l.price === "") return s;
+      return s + (Number(l.qty) || 0) * (Number(l.price) || 0);
+    }, 0));
+    var vat = showMoney ? round2(sub * 0.15) : 0;
+    var total = round2(sub + vat);
+    var logo = t.logoData
+      ? '<img class="biz-logo" src="' + O.esc(t.logoData) + '" alt="' + O.esc(t.tradingAs || t.name) + '">'
+      : '<div class="biz-word">' + O.esc(t.tradingAs || t.name) + "</div>";
+    var addr = [p.address1, p.address2, [p.city, p.postal].filter(Boolean).join(" "), p.province, p.country || "South Africa"].filter(function (x) { return x && String(x).trim(); });
+    var party = function (title, who) {
+      if (!who) return "";
+      return '<div class="biz-party"><div class="biz-k">' + O.esc(title) + "</div><strong>" + O.esc(who.name || "") + "</strong>" +
+        (who.lines || []).map(function (x) { return x ? "<div>" + O.esc(x) + "</div>" : ""; }).join("") + "</div>";
+    };
+    var rows = lines.map(function (l) {
+      var priced = !(l.price == null || l.price === "");
+      var amount = l.amount != null && l.amount !== "" ? Number(l.amount) : (priced ? (Number(l.qty) || 0) * Number(l.price) : null);
+      return "<tr><td>" + O.esc(l.description || "") + (l.detail ? '<div class="biz-detail">' + O.esc(l.detail) + "</div>" : "") +
+        '</td><td class="num">' + O.esc(l.qty) + "</td><td>" + O.esc(l.unit || "") + '</td><td class="num">' + (priced ? zar2(l.price) : "—") +
+        '</td><td class="num">' + (priced ? "15%" : "—") + '</td><td class="num">' + (amount == null ? "—" : zar2(amount)) + "</td></tr>";
+    }).join("");
+    var trading = p.tradingAs && p.tradingAs !== p.legalName ? "<div>Trading as " + O.esc(p.tradingAs) + "</div>" : "";
+    return '<article class="biz-doc" style="--brand:' + O.esc(color) + '"><header class="biz-top"><div class="biz-brand">' + logo + '</div><div class="biz-co"><strong>' +
+      O.esc(p.legalName || t.name) + "</strong>" + trading +
+      addr.map(function (x) { return "<div>" + O.esc(x) + "</div>"; }).join("") +
+      (p.phone ? "<div>" + O.esc(p.phone) + "</div>" : "") +
+      (p.email ? "<div>" + O.esc(p.email) + "</div>" : "") +
+      (p.website ? "<div>" + O.esc(p.website) + "</div>" : "") +
+      (p.vatNumber ? "<div>VAT " + O.esc(p.vatNumber) + "</div>" : "") +
+      (p.registrationNumber ? "<div>Reg. " + O.esc(p.registrationNumber) + "</div>" : "") +
+      '</div></header><div class="biz-title"><div><div class="biz-docname">' + O.esc(spec.title || "Document") + '</div><div class="biz-num">' + O.esc(spec.number || "") + "</div></div>" +
+      '<table class="biz-meta"><tbody>' + metaRow("Date", spec.date) + metaRow(spec.untilLabel || "Due", spec.until) + metaRow("Reference", spec.reference) + metaRow("Status", spec.status) + "</tbody></table></div>" +
+      '<div class="biz-parties">' + party(spec.billLabel || "Bill to", spec.bill) + party(spec.shipLabel || "Ship to", spec.ship) + "</div>" +
+      '<table class="biz-lines"><thead><tr><th>Description</th><th class="num">Qty</th><th>Unit</th><th class="num">Unit price</th><th class="num">VAT</th><th class="num">Amount</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="6">No lines</td></tr>') + "</tbody></table>" +
+      (showMoney
+        ? '<div class="biz-totals"><div><span>Subtotal</span><strong>' + zar2(sub) + "</strong></div><div><span>VAT 15%</span><strong>" + zar2(vat) + '</strong></div><div class="grand"><span>Total</span><strong>' + zar2(total) + "</strong></div></div>"
+        : (spec.note ? '<p class="biz-note">' + O.esc(spec.note) + "</p>" : "")) +
+      '<div class="biz-bank"><div class="biz-k">Banking details</div>' +
+      (b.bankIsExample ? '<div class="biz-example">Example only — not a real bank account</div>' : "") +
+      "<div>" + O.esc(b.bankName) + " · " + O.esc(b.accountName) + "</div><div>Account " + O.esc(b.accountNumber) + " · Branch " + O.esc(b.branchCode) + "</div></div>" +
+      '<footer class="biz-foot"><div>' + O.esc(b.footer || "") + '</div><div class="biz-page">Page 1 of 1</div></footer></article>';
+  }
+  function openPrint(html) {
     var root = document.getElementById("doc-print-root");
     if (!root) return;
-    root.innerHTML = '<article class="paper"><header style="border-bottom:4px solid ' + (t.color || "#3B2F8F") + ';padding-bottom:8px;margin-bottom:12px"><h1 style="margin:0">' + O.esc(t.tradingAs || t.name) + "</h1><div>" + O.esc((t.profile && t.profile.address1) || "") + " " + O.esc((t.profile && t.profile.city) || "") + "</div></header>" +
-      "<h2>" + O.esc(doc.number) + "</h2><p>" + O.esc(c ? c.name : "") + " \u00b7 " + O.esc(doc.date) + "</p><table style=\"width:100%;border-collapse:collapse\">" +
-      doc.lines.map(function (l) {
-        var p = prod(t, l.productId);
-        return "<tr><td>" + O.esc(p ? p.name : "") + "</td><td>" + l.qty + "</td><td style=\"text-align:right\">" + zar2(l.price) + "</td><td style=\"text-align:right\">" + zar2(l.qty * l.price) + "</td></tr>";
-      }).join("") +
-      "</table><p>Subtotal " + zar2(tot.sub) + "<br>VAT 15% " + zar2(tot.vat) + "<br><strong>Total " + zar2(tot.total) + "</strong></p></article>";
+    root.innerHTML = html;
     document.body.classList.add("printing-doc");
-    window.print();
-    document.body.classList.remove("printing-doc");
+    var cleanup = function () {
+      document.body.classList.remove("printing-doc");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    setTimeout(function () { window.print(); }, 40);
+  }
+  function productLine(t, l, priceKey) {
+    var p = prod(t, l.productId);
+    var price = priceKey ? l[priceKey] : l.price;
+    return {
+      description: p ? p.name : (l.productId || ""),
+      detail: p ? p.sku : "",
+      qty: l.qty,
+      unit: (p && p.uom) || "each",
+      price: price
+    };
+  }
+  function salesDocSpec(t, doc, kind) {
+    var invoice = kind === "invoice";
+    return {
+      title: invoice ? "Tax invoice" : "Quotation",
+      number: doc.number,
+      date: doc.date,
+      untilLabel: invoice ? "Due" : "Valid until",
+      until: invoice ? (doc.due && doc.due !== doc.date ? doc.due : plusDays(doc.date, 30)) : plusDays(doc.date, 14),
+      reference: doc.number,
+      status: doc.status,
+      bill: partyFromCustomer(t, doc.customerId),
+      ship: partyFromCustomer(t, doc.customerId),
+      lines: (doc.lines || []).map(function (l) { return productLine(t, l); })
+    };
+  }
+  function orderLines(o) {
+    var unit = round2(o.price * (1 - (o.discount || 0) / 100));
+    var qty = o.priceMode === "m2" ? o.m2 : o.qty;
+    var lines = [{
+      description: (o.colourName || o.colour || "Slab") + " " + (o.finish || "") + " " + o.stockType,
+      detail: o.L + " × " + o.W + " × " + o.T + " cm · grade " + o.grade + (o.slab ? " · slab " + o.slab : "") + (o.discount ? " · " + o.discount + "% discount" : ""),
+      qty: qty,
+      unit: o.priceMode === "m2" ? "m²" : "pcs",
+      price: unit,
+      amount: o.total
+    }];
+    if (o.transport) lines.push({ description: "Transport", detail: "Delivery of this order", qty: 1, unit: "trip", price: o.transport, amount: o.transport });
+    return lines;
+  }
+  function orderSpec(t, o, delivery) {
+    return {
+      title: delivery ? "Delivery note" : "Sales order",
+      number: delivery ? ("DN-" + o.orderNo) : o.orderNo,
+      date: o.date,
+      untilLabel: delivery ? "Order" : "Sage invoice",
+      until: delivery ? o.orderNo : (o.sage || "Not invoiced"),
+      reference: o.slab || o.orderNo,
+      status: o.complete ? "Complete" : "Open",
+      bill: partyFromCustomer(t, o.customerId),
+      ship: partyFromCustomer(t, o.customerId),
+      lines: orderLines(o)
+    };
+  }
+  function grvSpec(t, g) {
+    return {
+      title: "Goods received note",
+      number: g.number,
+      date: g.date,
+      untilLabel: "Posted",
+      until: g.posted ? "Yes — stock updated" : "Draft",
+      reference: g.number,
+      billLabel: "Received from",
+      bill: { name: g.supplier || "Sample supplier", lines: ["Sample supplier — invented for this demo"] },
+      shipLabel: "Delivered to",
+      ship: yardParty(t),
+      lines: (g.lines || []).map(function (l) { return productLine(t, l, "cost"); })
+    };
+  }
+  function printDoc(t, doc, kind) {
+    openPrint(renderBizDoc(t, salesDocSpec(t, doc, kind || (String(doc.number || "").indexOf("INV") >= 0 ? "invoice" : "quote"))));
   }
 
   function openCamera(t) {
@@ -1271,9 +1484,22 @@
     }
     if (act === "pdf-doc") {
       var td = O.getTenant(id);
+      captureDraft();
       var list2 = el.getAttribute("data-kind") === "invoice" ? td.books.invoices : td.books.quotes;
       var doc2 = list2.find(function (d) { return d.id === el.getAttribute("data-doc"); });
-      if (doc2) printDoc(td, doc2);
+      if (doc2) printDoc(td, draft && draft.id === doc2.id ? draft : doc2, el.getAttribute("data-kind"));
+      return true;
+    }
+    if (act === "print-sales-order" || act === "print-delivery") {
+      var to = O.getTenant(id); ensureBooks(to);
+      var ord = (to.books.orders || []).find(function (x) { return x.id === el.getAttribute("data-order"); });
+      if (ord) openPrint(renderBizDoc(to, orderSpec(to, ord, act === "print-delivery")));
+      return true;
+    }
+    if (act === "print-grv-doc") {
+      var tgr = O.getTenant(id); ensureBooks(tgr);
+      var note = (tgr.books.grvs || []).find(function (g) { return g.id === el.getAttribute("data-grv"); });
+      if (note) openPrint(renderBizDoc(tgr, grvSpec(tgr, note)));
       return true;
     }
     return false;
@@ -1318,5 +1544,41 @@
     document.body.appendChild(dr);
   }
   window.OmnivateLabels = { geom: geom, drawTest: drawTest, findCode: findCode, cameraOn: cameraOn };
+  window.OmnivateDocs = {
+    render: renderBizDoc,
+    open: openPrint,
+    ensure: ensureBusiness,
+    jobSpec: function (t, job) {
+      var order = (t.books.orders || []).find(function (o) { return o.orderNo === job.soNumber; });
+      return {
+        title: "Job card",
+        number: job.soNumber ? (job.soNumber + " · " + job.slabNo) : job.slabNo,
+        date: job.date,
+        untilLabel: "Sales order",
+        until: job.soNumber || "",
+        reference: job.slabNo,
+        status: job.type,
+        billLabel: "Customer",
+        bill: order ? partyFromCustomer(t, order.customerId) : yardParty(t),
+        shipLabel: "Cut to size",
+        ship: { name: job.type || "Cut", lines: [job.L + " × " + job.W + " × " + job.T + " cm", "Grade " + (job.grade || ""), "Machine " + (job.machine || ""), "Waste " + job.waste + "%"].filter(Boolean) },
+        showMoney: false,
+        note: "Production instruction only. Price, VAT and the amount sit on sales order " + (job.soNumber || "—") + ".",
+        lines: [{
+          description: (job.type || "Cut") + " from slab " + (job.slabNo || ""),
+          detail: (job.machine || "") + " · " + job.L + " × " + job.W + " × " + job.T + " cm",
+          qty: job.qty,
+          unit: "pcs",
+          price: null
+        }]
+      };
+    }
+  };
+  var prevReset = O.ext.afterReset;
+  O.ext.afterReset = function () {
+    if (prevReset) prevReset();
+    applyBusinessDefaults();
+  };
+  applyBusinessDefaults();
   O.render();
 })();
