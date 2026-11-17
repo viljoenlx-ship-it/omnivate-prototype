@@ -541,14 +541,23 @@
     }
   }
   async function connectSerial(model) {
+    if (printerInfo && printerInfo.modelId != null && device && device.gatt && device.gatt.connected) return;
     device = { name: (io && io.name) || "USB serial", gatt: { connected: true, disconnect: function () {} } };
     characteristic = { properties: { write: true, writeWithoutResponse: true } };
-    writeMode = "fast";
+    writeMode = "paced";
     _bundleAllowed = true;
-    logAlways("transport=usb baud=115200 framing=55 55 .. aa aa");
-    await writeRaw(new Uint8Array([0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa]));
-    await sleep(200);
+    logAlways("transport=usb baud=115200 8N1 framing=55 55 .. aa aa (no BLE 0x03 prefix)");
+    // Serial is not BLE: the 0x03 prefix is a Bluetooth link marker. Ask with a normal frame.
+    let hello = await sendWait(0xc1, [0x01], 0xc2, 1000);
+    if (!hello) {
+      await sleep(200);
+      hello = await sendWait(0xc1, [0x01], 0xc2, 1000);
+    }
     await detectPrinter();
+    if ((!printerInfo || printerInfo.modelId == null) && hello) {
+      await sleep(200);
+      await detectPrinter();
+    }
     const meta = (printerInfo && printerInfo.modelId != null) ? MODEL_IDS[printerInfo.modelId] : null;
     const task = (meta && meta.task) || (model && model.task);
     const needsPacing = meta ? !!meta.paced : (task === "b1");
@@ -557,8 +566,10 @@
     if (task === "b1") await b1Handshake();
   }
   async function connect(model) {
-    if (characteristic && device && device.gatt.connected) return;
+    // Serial must be tried before the BLE "already connected" return. A leftover
+    // GATT session otherwise made USB connect() exit before the serial handshake.
     if (io && io.kind === "serial") return connectSerial(model);
+    if (characteristic && device && device.gatt.connected) return;
     logMsg(`Niimbot ${VERSION} — connecting (task=${(model && model.task) || "?"})`);
     // `!navigator.bluetooth` has two different causes and they need different advice.
     // `isSecureContext` is what the browser itself gates the API on, so it is the

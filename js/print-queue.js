@@ -54,39 +54,84 @@
     reading = false;
   }
 
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function hexId(n) {
+    if (n == null || isNaN(Number(n))) return "----";
+    return Number(n).toString(16).toUpperCase().padStart(4, "0");
+  }
+  async function closePort() {
+    try { if (reader) await reader.cancel(); } catch (e) {}
+    try { if (reader) reader.releaseLock(); } catch (e) {}
+    try { if (writer) await writer.close(); } catch (e) {}
+    try { if (writer) writer.releaseLock(); } catch (e) {}
+    try { if (port) await port.close(); } catch (e) {}
+    reader = null;
+    writer = null;
+    port = null;
+    reading = false;
+  }
+  async function writeSerial(bytes) {
+    if (!writer) throw new Error("USB port is not writable");
+    await sleep(10);
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    for (var off = 0; off < u8.length; off += 512) {
+      await writer.write(u8.subarray(off, Math.min(off + 512, u8.length)));
+    }
+  }
   async function connectUsb() {
     if (!navigator.serial) {
-      throw new Error("Web Serial needs Chrome or Edge on a computer. On Windows, install the CH340/CH341 USB-serial driver if the M2-H does not show up as a COM port.");
+      throw new Error("Web Serial needs Chrome or Edge. The M2-H often appears as Port 3 (COM3). Only install a CH340 driver if Device Manager names a CH340 chip; many M2-H units are plain USB CDC.");
     }
+    // Picker first so Chrome still treats this as a click. Then drop any BLE session.
     var chosen = await navigator.serial.requestPort();
-    await chosen.open({ baudRate: 115200 });
-    writer = chosen.writable.getWriter();
-    reader = chosen.readable.getReader();
-    port = chosen;
-    window.Niimbot.setTransport({
-      kind: "serial",
-      name: "USB",
-      write: function (bytes) { return writer.write(bytes); },
-      close: async function () {
-        try { if (reader) reader.releaseLock(); } catch (e) {}
-        try { if (writer) writer.releaseLock(); } catch (e) {}
-        try { if (port) await port.close(); } catch (e) {}
-        reader = null; writer = null; port = null;
+    if (window.Niimbot && window.Niimbot.disconnect) {
+      try { await window.Niimbot.disconnect(); } catch (e) {}
+    }
+    await closePort();
+    try {
+      await chosen.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none", flowControl: "none", bufferSize: 16384 });
+      if (chosen.setSignals) {
+        try { await chosen.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch (e) {}
       }
-    });
-    readLoop();
-    await window.Niimbot.connect(M2H());
-    remember("usb");
-    var info = window.Niimbot.printer;
-    setStatus("USB · " + (info && info.label ? info.label : "M2-H") + " · 115200");
+      await sleep(80);
+      writer = chosen.writable.getWriter();
+      reader = chosen.readable.getReader();
+      port = chosen;
+      window.Niimbot.setTransport({
+        kind: "serial",
+        name: "USB",
+        write: writeSerial,
+        close: closePort
+      });
+      readLoop();
+      await sleep(30);
+      try {
+        await window.Niimbot.connect(M2H());
+      } catch (err) {
+        await closePort();
+        window.Niimbot.setTransport(null);
+        throw err;
+      }
+      var info = window.Niimbot.printer;
+      var ids = chosen.getInfo ? chosen.getInfo() : {};
+      if (!info || info.modelId == null) {
+        await closePort();
+        window.Niimbot.setTransport(null);
+        throw new Error("USB port opened (VID " + hexId(ids.usbVendorId) + " PID " + hexId(ids.usbProductId) + ") but the printer did not answer. Close the NIIMBOT phone or desktop app and disconnect Bluetooth on this page first — only one link at a time. Chrome may call the port \"Port 3\" (COM3).");
+      }
+      remember("usb");
+      setStatus("USB · " + (info.label || "M2-H") + " · 115200 · VID " + hexId(ids.usbVendorId) + " PID " + hexId(ids.usbProductId));
+    } catch (err) {
+      await closePort();
+      if (window.Niimbot && window.Niimbot.setTransport) window.Niimbot.setTransport(null);
+      throw err;
+    }
   }
 
   function rememberBluetooth() {
     remember("bluetooth");
     setStatus("Bluetooth · connected");
   }
-
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
   async function runQueue(items, ui) {
     var total = items.reduce(function (s, it) { return s + (it.copies || 1); }, 0);

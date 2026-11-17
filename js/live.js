@@ -622,7 +622,7 @@
       '<button class="btn btn-sm btn-secondary" data-act="connect-printer">Connect via Bluetooth</button>' +
       '<button class="btn btn-sm btn-secondary" data-act="connect-usb">Connect via USB</button>' +
       "</div>" +
-      '<p class="tiny" style="margin-top:8px">The test draws a black box on the exact edge of the ' + s.w_px + "\u00d7" + s.h_px + " bitmap. Nudge offset X/Y if the box does not sit on the label. Last link: " + O.esc((window.OmnivatePrint && window.OmnivatePrint.lastLink()) || "none") + ". Close the NIIMBOT phone app before connecting — only one link at a time. USB uses Chrome or Edge at 115200 baud (same 55 55 … aa aa frames as Bluetooth). On Windows, install the CH340/CH341 USB-serial driver if the M2-H does not appear as a COM port.</p>" +
+      '<p class="tiny" style="margin-top:8px">The test draws a black box on the exact edge of the ' + s.w_px + "\u00d7" + s.h_px + " bitmap. Nudge offset X/Y if the box does not sit on the label. Last link: " + O.esc((window.OmnivatePrint && window.OmnivatePrint.lastLink()) || "none") + ". Chrome may list the printer as \"Port 3\" (COM3). Close the NIIMBOT phone and desktop apps, and disconnect Bluetooth on this page, before USB — one link only. Only install a CH340 driver if Device Manager names a CH340 chip; many M2-H units use built-in USB CDC.</p>" +
       "</div></div>";
   }
   function presetBtn(w, h) {
