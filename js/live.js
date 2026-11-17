@@ -4,7 +4,7 @@
   var O = window.Omnivate;
   if (!O) return;
 
-  var SEED = "demo-2026-11-17-scan";
+  var SEED = "demo-2026-11-17-wholesale";
   var LABEL_KEY = "omnivate.m2hLabel.v2";
   var M2H = {
     label: "Niimbot M2-H",
@@ -269,13 +269,11 @@
     P("TQ-PO-NERO", "Nero porcelain slab 6 mm", 1890, 1120, 16, 6, "slab"),
     P("TQ-PO-CAL", "Calacatta porcelain slab 6 mm", 2150, 1300, 9, 4, "slab"),
     P("TQ-PO-CEM", "Cement Grey porcelain 600\u00d71200", 285, 160, 80, 20, "m\u00b2"),
-    P("TQ-PO-OAK", "Timber-look porcelain 200\u00d71200", 320, 185, 45, 15, "m\u00b2"),
-    P("TQ-OFF-GRY", "Grey granite offcut crate", 650, 280, 7, 4, "crate"),
-    P("TQ-OFF-BLK", "Black granite offcut pack", 890, 340, 3, 4, "pack"),
-    P("TQ-TMB-GRY", "Tombstone blank grey 90\u00d750\u00d78 cm", 1450, 820, 12, 4, "each"),
-    P("TQ-TMB-BLK", "Tombstone blank black 100\u00d760\u00d710 cm", 2100, 1250, 5, 3, "each"),
-    P("TQ-SEL-5L", "Stone sealant 5 L", 485, 260, 28, 10, "each"),
-    P("TQ-ADH-20", "Epoxy stone adhesive 20 kg", 740, 410, 9, 6, "each")
+    P("TQ-PO-OAK", "Oak porcelain \u00b7 polished \u00b7 20 mm \u00b7 3200\u00d71600 \u00b7 CL", 2680, 1740, 14, 4, "m\u00b2"),
+    P("TQ-OFF-GRY", "Rustenburg Grey offcuts \u00b7 honed \u00b7 20 mm \u00b7 randoms \u00b7 C", 980, 420, 22, 8, "m\u00b2"),
+    P("TQ-OFF-BLK", "Impala Black offcuts \u00b7 polished \u00b7 30 mm \u00b7 randoms \u00b7 C", 1240, 510, 9, 4, "m\u00b2"),
+    P("TQ-GR-NRO20", "Nero Africa granite \u00b7 polished \u00b7 20 mm \u00b7 3200\u00d71600 \u00b7 CL", 3120, 2080, 11, 4, "m\u00b2"),
+    P("TQ-QZ-ISL20", "Island White quartz \u00b7 polished \u00b7 20 mm \u00b7 3200\u00d71600 \u00b7 A", 3980, 2550, 7, 3, "m\u00b2")
   ];
   var GW_PRODUCTS = [
     P("GW-GR-RST20", "Rustenburg Grey 20 mm polished", 2890, 2100, 15, 6, "m\u00b2"),
@@ -290,12 +288,12 @@
     P("GW-PO-MAR", "Marble-look porcelain slab 6 mm", 2350, 1500, 11, 4, "slab"),
     P("GW-PO-TER", "Terrazzo porcelain 600\u00d7600", 340, 190, 60, 20, "m\u00b2"),
     P("GW-PO-SLT", "Slate-look porcelain 600\u00d7600", 310, 175, 8, 15, "m\u00b2"),
-    P("GW-OFF-MIX", "Mixed offcut pallet", 1200, 500, 4, 2, "pallet"),
-    P("GW-OFF-QZ", "Quartz remnant pack", 980, 400, 6, 2, "pack"),
-    P("GW-TMB-STD", "Tombstone blank 80\u00d745\u00d77 cm", 1650, 980, 9, 3, "each"),
-    P("GW-TMB-UPR", "Upright blank black 120\u00d770\u00d710 cm", 2850, 1700, 2, 2, "each"),
-    P("GW-SEL-1L", "Penetrating sealer 1 L", 195, 95, 40, 12, "each"),
-    P("GW-ADH-5", "Stone mastic adhesive 5 kg", 265, 140, 18, 8, "each")
+    P("GW-OFF-MIX", "Mixed granite offcuts \u00b7 honed \u00b7 20 mm \u00b7 randoms \u00b7 C", 890, 360, 18, 6, "m\u00b2"),
+    P("GW-OFF-QZ", "Quartz offcuts \u00b7 polished \u00b7 20 mm \u00b7 randoms \u00b7 C", 1120, 470, 11, 4, "m\u00b2"),
+    P("GW-GR-AFB20", "African Black granite \u00b7 polished \u00b7 20 mm \u00b7 3200\u00d71600 \u00b7 CL", 3340, 2210, 8, 3, "m\u00b2"),
+    P("GW-QZ-CAL30", "Calacatta quartz \u00b7 leathered \u00b7 30 mm \u00b7 3200\u00d71600 \u00b7 A", 4680, 3120, 5, 2, "m\u00b2"),
+    P("GW-OFF-BEL", "Belfast Black offcuts \u00b7 polished \u00b7 20 mm \u00b7 randoms \u00b7 C", 1360, 540, 7, 3, "m\u00b2"),
+    P("GW-PO-NRO20", "Nero porcelain \u00b7 honed \u00b7 20 mm \u00b7 3200\u00d71600 \u00b7 CL", 2460, 1580, 9, 3, "m\u00b2")
   ];
 
   function sampleCustomers(prefix, names, other) {
@@ -321,34 +319,18 @@
       return function () { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
     })(4716);
     var pick = function (arr) { return arr[Math.floor(rand() * arr.length)]; };
-    var types = ["SLABS", "HEADSTONES", "LEDGERS", "KERBS", "BASES", "PILLARS", "VASES", "RANDOMS", "SPECIAL"];
-    var grades = ["CL", "C", "U", "P"];
-    var finishes = ["T/P", "U/P", "D/P"];
+    var grades = ["CL", "C", "A"];
+    var finishes = ["Polished", "Honed", "Leathered"];
     var colours = [["RTB", "Rustenburg Black"], ["RGR", "Rustenburg Grey"], ["IMP", "Impala"], ["BEL", "Belfast Black"], ["AFB", "African Black"], ["STG", "Steel Grey"], ["NRO", "Nero"], ["CAL", "Calacatta"]];
-    var dims = {
-      SLABS: [260, 320, 140, 180, 2, 3],
-      HEADSTONES: [80, 120, 45, 70, 8, 12],
-      LEDGERS: [180, 220, 60, 90, 8, 10],
-      KERBS: [100, 150, 15, 22, 10, 15],
-      BASES: [110, 160, 30, 45, 10, 15],
-      PILLARS: [80, 140, 15, 25, 15, 25],
-      VASES: [20, 35, 20, 30, 25, 40],
-      RANDOMS: [40, 90, 30, 60, 3, 8],
-      SPECIAL: [150, 240, 40, 80, 3, 10]
-    };
     var orders = [];
     for (var i = 0; i < 30; i++) {
-      var type = types[i % types.length];
-      var d = dims[type];
-      var L = d[0] + Math.floor(rand() * (d[1] - d[0] + 1));
-      var W = d[2] + Math.floor(rand() * (d[3] - d[2] + 1));
-      var T = d[4] + Math.floor(rand() * ((d[5] - d[4]) * 2 + 1)) / (d[5] <= 3 ? 1 : 1);
-      if (type === "SLABS") T = rand() > 0.5 ? 3 : 2;
-      var qty = type === "KERBS" || type === "VASES" ? 2 + Math.floor(rand() * 8) : 1;
+      var type = i % 5 === 0 ? "RANDOMS" : "SLABS";
+      var L = type === "SLABS" ? 280 + (i % 5) * 10 : 140 + (i % 4) * 20;
+      var W = type === "SLABS" ? 160 : 80;
+      var T = i % 2 ? 3 : 2;
+      var qty = type === "SLABS" ? 4 + (i % 3) : 6;
       var col = pick(colours);
-      var m = measures(L, W, T, qty);
-      var perM2 = type === "SLABS" || type === "RANDOMS";
-      var price = perM2 ? 1800 + Math.floor(rand() * 2200) : 450 + Math.floor(rand() * 4000);
+      var price = type === "SLABS" ? 1850 + (i % 6) * 150 : 1100 + (i % 3) * 80;
       var day = 18 + Math.floor((i / 30) * 58);
       var dt = new Date(Date.UTC(2026, 8, 18));
       dt.setUTCDate(dt.getUTCDate() + Math.floor(i * 1.9));
@@ -360,13 +342,13 @@
         customerId: customers[i % customers.length].id,
         stockType: type,
         L: L, W: W, T: T, qty: qty,
-        slab: type === "SLABS" || type === "HEADSTONES" || type === "LEDGERS" ? "S" + (1040 + i) : "",
+        slab: "S" + (1040 + i),
         grade: grades[i % grades.length],
         colour: col[0],
         colourName: col[1],
         finish: finishes[i % finishes.length],
         discount: [0, 0, 5, 10][i % 4],
-        priceMode: perM2 ? "m2" : "piece",
+        priceMode: "m2",
         price: price,
         transport: [0, 450, 850, 1200][i % 4],
         sage: i % 3 === 0 ? "" : "SI" + (88000 + i),
@@ -385,14 +367,14 @@
     if (t.id === "top-quartz") {
       var cust = sampleCustomers("TQ", [
         ["Sample: East Rand Stoneworks", "Kempton Park"],
-        ["Sample: Highveld Memorials", "Springs"],
+        ["Sample: Highveld Kitchens", "Springs"],
         ["Sample: Vaal Fabricators", "Vereeniging"],
         ["Sample: Pretoria Surface Co", "Pretoria"],
         ["Sample: West Rand Installers", "Roodepoort"],
         ["Sample: Midrand Benchtops", "Midrand"],
         ["Sample: Alberton Stone & Tops", "Alberton"],
         ["Sample: Benoni Kitchen Fitters", "Benoni"],
-        ["Sample: Germiston Monuments", "Germiston"]
+        ["Sample: Germiston Stone Retail", "Germiston"]
       ], { name: "The Granite Warehouse (sample account)", city: "Gauteng" });
       var lines = function (spec) { return linesOf(TQ_PRODUCTS, spec); };
       return {
@@ -400,31 +382,35 @@
         products: TQ_PRODUCTS,
         customers: cust,
         quotes: [
-          quote("q1", "TQ-QT-1042", "TQ-C1", "2026-11-14", "Draft", lines([["TQ-GR-RST20", 12], ["TQ-SEL-5L", 2]])),
-          quote("q2", "TQ-QT-1043", "TQ-C6", "2026-11-10", "Sent", lines([["TQ-QZ-CAL20", 8]])),
-          quote("q3", "TQ-QT-1044", "TQ-C2", "2026-11-04", "Sent", lines([["TQ-TMB-GRY", 4], ["TQ-TMB-BLK", 2]])),
-          quote("q4", "TQ-QT-1045", "TQ-OTHER", "2026-10-28", "Accepted", lines([["TQ-GR-IMP30", 6], ["TQ-OFF-BLK", 2]])),
-          quote("q5", "TQ-QT-1046", "TQ-C4", "2026-11-16", "Draft", lines([["TQ-PO-NERO", 5]]))
+          quote("q1", "TQ-QT-1042", "TQ-C1", "2026-11-14", "Draft", lines([["TQ-GR-RST20", 18], ["TQ-OFF-GRY", 6]])),
+          quote("q2", "TQ-QT-1043", "TQ-C6", "2026-11-10", "Sent", lines([["TQ-QZ-CAL20", 22]])),
+          quote("q3", "TQ-QT-1044", "TQ-C2", "2026-11-04", "Sent", lines([["TQ-GR-BEL20", 14], ["TQ-QZ-STA20", 8]])),
+          quote("q4", "TQ-QT-1045", "TQ-OTHER", "2026-10-28", "Accepted", lines([["TQ-GR-IMP30", 16], ["TQ-OFF-BLK", 5]])),
+          quote("q5", "TQ-QT-1046", "TQ-C4", "2026-11-16", "Draft", lines([["TQ-PO-NERO", 20]]))
         ],
         invoices: [
-          invoice("i1", "TQ-INV-2201", "TQ-C3", "2026-11-02", "Paid", lines([["TQ-GR-AFB20", 10]])),
-          invoice("i2", "TQ-INV-2202", "TQ-C6", "2026-11-07", "Unpaid", lines([["TQ-QZ-CAR20", 6], ["TQ-ADH-20", 1]])),
-          invoice("i3", "TQ-INV-2203", "TQ-OTHER", "2026-11-12", "Paid", lines([["TQ-GR-RST20", 18]])),
-          invoice("i4", "TQ-INV-2204", "TQ-C7", "2026-10-24", "Paid", lines([["TQ-PO-CEM", 40]])),
-          invoice("i5", "TQ-INV-2205", "TQ-C5", "2026-11-15", "Unpaid", lines([["TQ-QZ-STA20", 3], ["TQ-SEL-5L", 4]]))
+          invoice("i1", "TQ-INV-2201", "TQ-C1", "2026-09-16", "Paid", [{ productId: "TQ-GR-RST20", qty: 40, price: 2500 }]),
+          invoice("i2", "TQ-INV-2202", "TQ-C3", "2026-09-29", "Paid", [{ productId: "TQ-GR-AFB20", qty: 30, price: 2600 }]),
+          invoice("i3", "TQ-INV-2203", "TQ-C6", "2026-10-09", "Paid", [{ productId: "TQ-QZ-CAL20", qty: 36, price: 3400 }]),
+          invoice("i4", "TQ-INV-2204", "TQ-C4", "2026-10-23", "Paid", [{ productId: "TQ-PO-NERO", qty: 50, price: 1900 }]),
+          invoice("i5", "TQ-INV-2205", "TQ-C5", "2026-11-03", "Paid", [{ productId: "TQ-GR-IMP30", qty: 48, price: 2800 }]),
+          invoice("i6", "TQ-INV-2206", "TQ-C6", "2026-11-11", "Unpaid", [{ productId: "TQ-QZ-CAR20", qty: 55, price: 3100 }]),
+          invoice("i7", "TQ-INV-2207", "TQ-C7", "2026-11-18", "Unpaid", [{ productId: "TQ-QZ-STA20", qty: 40, price: 3650 }]),
+          invoice("i8", "TQ-INV-2208", "TQ-OTHER", "2026-11-24", "Paid", [{ productId: "TQ-GR-RST20", qty: 70, price: 2450 }]),
+          invoice("i9", "TQ-INV-2209", "TQ-C8", "2026-11-27", "Paid", [{ productId: "TQ-PO-CAL", qty: 80, price: 1870 }])
         ],
-        orders: []
+        orders: seedOrders(cust)
       };
     }
     if (t.id === "granite-warehouse") {
       var gc = sampleCustomers("GW", [
-        ["Sample: Mamelodi Memorials", "Pretoria"],
-        ["Sample: Eastvale Tombstones", "Springs"],
-        ["Sample: Highveld Headstones", "Heidelberg"],
+        ["Sample: Mamelodi Fabricators", "Pretoria"],
+        ["Sample: Eastvale Stone Retail", "Springs"],
+        ["Sample: Highveld Installers", "Heidelberg"],
         ["Sample: Kempton Kitchen Tops", "Kempton Park"],
         ["Sample: Vaal River Fabricators", "Vanderbijlpark"],
         ["Sample: Pretoria Stone Fitters", "Pretoria"],
-        ["Sample: West Rand Monuments", "Krugersdorp"],
+        ["Sample: West Rand Kitchens", "Krugersdorp"],
         ["Sample: Alberton Benchtops", "Alberton"],
         ["Sample: Boksburg Installations", "Boksburg"]
       ], { name: "Top Quartz (sample account)", city: "Kempton Park" });
@@ -434,11 +420,18 @@
         customers: gc,
         quotes: [
           quote("gq1", "GW-QT-876", "GW-C4", "2026-11-11", "Sent", linesOf(GW_PRODUCTS, [["GW-QZ-CAL20", 4]])),
-          quote("gq2", "GW-QT-877", "GW-C1", "2026-11-15", "Draft", linesOf(GW_PRODUCTS, [["GW-TMB-STD", 3]]))
+          quote("gq2", "GW-QT-877", "GW-C1", "2026-11-15", "Draft", linesOf(GW_PRODUCTS, [["GW-GR-AFB20", 12]]))
         ],
         invoices: [
-          invoice("gi1", "GW-INV-1538", "GW-C2", "2026-11-05", "Paid", linesOf(GW_PRODUCTS, [["GW-GR-BEL20", 6]])),
-          invoice("gi2", "GW-INV-1540", "GW-C7", "2026-11-13", "Unpaid", linesOf(GW_PRODUCTS, [["GW-GR-IMP20", 2], ["GW-SEL-1L", 6]]))
+          invoice("gi1", "GW-INV-1538", "GW-C4", "2026-09-14", "Paid", [{ productId: "GW-GR-RST20", qty: 42, price: 2550 }]),
+          invoice("gi2", "GW-INV-1539", "GW-C2", "2026-09-26", "Paid", [{ productId: "GW-GR-BEL20", qty: 32, price: 3200 }]),
+          invoice("gi3", "GW-INV-1540", "GW-C5", "2026-10-07", "Paid", [{ productId: "GW-QZ-CAL20", qty: 40, price: 3600 }]),
+          invoice("gi4", "GW-INV-1541", "GW-C6", "2026-10-20", "Paid", [{ productId: "GW-GR-STG20", qty: 46, price: 2400 }]),
+          invoice("gi5", "GW-INV-1542", "GW-C3", "2026-11-02", "Paid", [{ productId: "GW-GR-IMP20", qty: 50, price: 2900 }]),
+          invoice("gi6", "GW-INV-1543", "GW-C7", "2026-11-10", "Unpaid", [{ productId: "GW-QZ-BLK20", qty: 48, price: 3650 }]),
+          invoice("gi7", "GW-INV-1544", "GW-C8", "2026-11-17", "Unpaid", [{ productId: "GW-GR-KAS20", qty: 36, price: 3600 }]),
+          invoice("gi8", "GW-INV-1545", "GW-OTHER", "2026-11-22", "Paid", [{ productId: "GW-PO-MAR", qty: 90, price: 2040 }]),
+          invoice("gi9", "GW-INV-1546", "GW-C9", "2026-11-28", "Paid", [{ productId: "GW-QZ-SNO20", qty: 44, price: 3460 }])
         ],
         orders: seedOrders(gc)
       };
@@ -479,10 +472,15 @@
 
   function metrics(t) {
     var b = t.books;
-    var ym = todayKey();
     var sales = 0;
+    var debtors = 0;
     (b.invoices || []).forEach(function (inv) {
-      if (String(inv.date).slice(0, 7) === ym && inv.status !== "Void") sales += docTotals(inv.lines).total;
+      if (inv.status === "Void") return;
+      var d = String(inv.date || "");
+      if (d < "2026-09-01" || d > "2026-11-30") return;
+      var tot = docTotals(inv.lines).total;
+      sales += tot;
+      if (inv.status !== "Paid") debtors += tot;
     });
     if (!(b.invoices || []).length) {
       (b.orders || []).forEach(function (o) {
@@ -496,7 +494,8 @@
       stock += (Number(p.onHand) || 0) * excl(p.costIncl);
       if (low(p)) lows++;
     });
-    return { sales: sales, openQ: openQ, openO: openO, stock: stock, lows: lows };
+    var orderBook = (b.orders || []).reduce(function (s, o) { return s + (Number(o.total) || 0) + (Number(o.transport) || 0); }, 0);
+    return { sales: round2(sales), debtors: round2(debtors), orderBook: round2(orderBook), openQ: openQ, openO: openO, stock: stock, lows: lows };
   }
 
   function findCode(t, code) {
@@ -803,7 +802,7 @@
     if (t.modules.M22 || t.modules.M23) items.push({ id: "customers", label: "Customers", on: true });
     if (t.modules.M22) items.push({ id: "quotes", label: "Quotes", on: true });
     if (t.modules.M22 || t.modules.M17) items.push({ id: "invoices", label: "Invoices", on: true });
-    if (t.id === "granite-warehouse" && t.modules.M22) items.push({ id: "orders", label: "Sales orders", on: true });
+    if (t.modules.M22 && (t.id === "granite-warehouse" || t.id === "top-quartz")) items.push({ id: "orders", label: "Sales orders", on: true });
     if (window.OmnivateShop) items = items.concat(window.OmnivateShop.nav(t));
     var cur = screenName();
     return items.filter(function (i) { return i.on !== false; }).map(function (i) {
@@ -833,7 +832,8 @@
   function home(t) {
     var m = metrics(t);
     var k = [
-      ["Sales this month", zar2(m.sales), "Incl. 15% VAT"],
+      ["Sales, Sep\u2013Nov", zar2(m.sales), "Incl. 15% VAT"],
+      ["Debtors", zar2(m.debtors), "Unpaid, incl. VAT"],
       ["Quotes open", String(m.openQ), "Draft and sent"],
       ["Stock value", zar2(m.stock), "At cost, excl. VAT"],
       ["Low stock", String(m.lows), "At or below reorder"]
@@ -946,7 +946,7 @@
   }
   function orders(t) {
     if (!t.modules.M22) return '<div class="empty"><h3>Sales is turned off</h3><p>Enable the Sales module in the Control Centre.</p></div>';
-    return '<div class="page-head"><div><h1>Sales orders</h1><p>Sample yard book. Scan a slab number (S1040) or order (SO4716). Columns follow the Control Centre.</p></div><div class="actions">' + cameraBtn(t) + "</div></div>" +
+    return '<div class="page-head"><div><h1>Sales orders</h1><p>Wholesale slabs and offcuts for fabricators. Order book ' + zar2(metrics(t).orderBook) + '. Scan S1040 or SO4716.</p></div><div class="actions">' + cameraBtn(t) + "</div></div>" +
       labelPanel() +
       scanBar("Handheld wedge works even when this box is not focused, as long as you are not typing in another field.") +
       '<div class="card">' + ordersTable(t) + "</div>";

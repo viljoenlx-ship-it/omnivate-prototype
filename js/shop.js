@@ -155,9 +155,9 @@
         if (i % 3 === 0) {
           jobs.push({
             id: "job" + block.id, date: addDays(block.date, 16), slabNo: block.blockId + "-1",
-            machine: ["MULTI", "BLADE", "CTS"][i % 3], type: ["KERBS", "HEADSTONES", "LEDGERS", "BASES"][i % 4],
-            L: 100, W: 20, T: 15, qty: 6, grade: "C",
-            m2: round2(1 * 0.2 * 6), m3: round2(1 * 0.2 * 0.15 * 6),
+            machine: ["MULTI", "BLADE", "CTS"][i % 3], type: ["BENCHTOP", "SPLASHBACK", "ISLAND", "VANITY"][i % 4],
+            L: 240, W: 65, T: 2, qty: 2, grade: "CL",
+            m2: round2(2.4 * 0.65 * 2), m3: round2(2.4 * 0.65 * 0.02 * 2),
             waste: 12, soNumber: "SO" + (4716 + (i % 10))
           });
         }

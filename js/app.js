@@ -13,7 +13,7 @@
   }
   var SLAB_ORDER_COLS = [
     { id: "M22::Slab orders::date", name: "Date", dataType: "Date", example: "2026-11-12" },
-    { id: "M22::Slab orders::customer", name: "Customer", dataType: "Text", example: "Sample Memorials" },
+    { id: "M22::Slab orders::customer", name: "Customer", dataType: "Text", example: "Sample: Kempton Fabricators" },
     { id: "M22::Slab orders::order", name: "Order no.", dataType: "Text", example: "SO4716" },
     { id: "M22::Slab orders::type", name: "Stock type", dataType: "Enum", example: "SLABS" },
     { id: "M22::Slab orders::L", name: "L cm", dataType: "Decimal", example: "280" },
@@ -1756,7 +1756,7 @@
     const mid = ui.colModule[t.id] || (t.id === "granite-warehouse" ? "M22" : enabled[0] && enabled[0].code) || "M22";
     let screens = screensFor(mid);
     if (t.id === "granite-warehouse" && mid === "M22" && !screens.some((s) => s.name === "Slab orders")) {
-      screens = screens.concat([{ name: "Slab orders", type: "List grid", columnCount: SLAB_ORDER_COLS.length, purpose: "Sample yard orders for slabs, headstones and cut stone. Hiding a column here removes it from the client grid." }]);
+      screens = screens.concat([{ name: "Slab orders", type: "List grid", columnCount: SLAB_ORDER_COLS.length, purpose: "Wholesale slab and offcut orders. Hiding a column here removes it from the client grid." }]);
     }
     if (!ui.colScreen[t.id] && t.id === "granite-warehouse" && mid === "M22") ui.colScreen[t.id] = "Slab orders";
     const sid = ui.colScreen[t.id] || screens[0] && screens[0].name || "";
