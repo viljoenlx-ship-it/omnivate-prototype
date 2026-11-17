@@ -1414,6 +1414,12 @@
       </div>
     </div>
     ${ui.askOpen ? renderAskPanel() : `<button class="ask-fab" data-act="open-ask" title="Ask Omnivate">${icon("zap", 18)} <span>Ask Omnivate</span></button>`}
+    <nav class="owner-tabs">
+      <a class="${route.view === "fleet" || route.view === "tenants" ? "on" : ""}" href="#/fleet">Fleet</a>
+      <a class="${route.view === "users" ? "on" : ""}" href="#/users">Users</a>
+      <a class="${route.view === "releases" ? "on" : ""}" href="#/releases">Releases</a>
+      <button type="button" data-act="toggle-sidebar">Menu</button>
+    </nav>
   `;
     const gs = document.getElementById("global-search");
     if (gs) {
@@ -3085,6 +3091,7 @@
     }
     const box = document.getElementById("ask-messages");
     if (box) box.scrollTop = box.scrollHeight;
+    if (window.OmnivatePhone) window.OmnivatePhone.dress();
   }
   function bindAfterRender() {
     const logo = document.getElementById("logo-file");

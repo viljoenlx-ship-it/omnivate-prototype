@@ -620,8 +620,9 @@
       '<button class="btn btn-sm btn-primary" data-act="print-test">Print test label</button>' +
       '<button class="btn btn-sm btn-secondary" data-act="print-test-browser">Test via computer</button>' +
       '<button class="btn btn-sm btn-secondary" data-act="connect-printer">Connect via Bluetooth</button>' +
-      '<button class="btn btn-sm btn-secondary" data-act="connect-usb">Connect via USB</button>' +
+      '<button class="btn btn-sm btn-secondary usb-only" data-act="connect-usb">Connect via USB</button>' +
       "</div>" +
+      '<p class="usb-phone-note">USB needs desktop Chrome or Edge. On this phone, use Bluetooth.</p>' +
       '<p class="tiny" style="margin-top:8px">The test draws a black box on the exact edge of the ' + s.w_px + "\u00d7" + s.h_px + " bitmap. Nudge offset X/Y if the box does not sit on the label. Last link: " + O.esc((window.OmnivatePrint && window.OmnivatePrint.lastLink()) || "none") + ". Chrome may list the printer as \"Port 3\" (COM3). Close the NIIMBOT phone and desktop apps, and disconnect Bluetooth on this page, before USB — one link only. Only install a CH340 driver if Device Manager names a CH340 chip; many M2-H units use built-in USB CDC.</p>" +
       "</div></div>";
   }
@@ -813,11 +814,59 @@
     }).join("");
   }
 
+  function ico(name) {
+    var paths = {
+      home: '<path d="M4 11 12 4l8 7v9a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/>',
+      stock: '<path d="M3 8h18v11H3z"/><path d="M3 8 7 4h10l4 4"/>',
+      scan: '<path d="M7 4H4v3M17 4h3v3M4 17v3h3M20 17v3h-3M8 12h8"/>',
+      prod: '<path d="M12 3 4 7v10l8 4 8-4V7z"/>',
+      sales: '<path d="M5 7h14v12H5zM9 7V5h6v2"/>',
+      more: '<path d="M5 7h14M5 12h14M5 17h14"/>'
+    };
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (paths[name] || paths.more) + "</svg>";
+  }
+  function quickRow(t) {
+    var bits = [];
+    if (t.modules.M29) bits.push(["grv", "Receive stock"]);
+    if (t.modules.M22) bits.push(["quote/new", "New quote"]);
+    if (t.features && t.features.production) bits.push(["production", "Move a block"]);
+    if (t.features && t.features.timesheets) bits.push(["timesheets", "Clock in"]);
+    if (!bits.length) return "";
+    return '<div class="quick-row">' + bits.map(function (b) {
+      return '<a href="#/preview/' + t.id + "/work/" + b[0] + '">' + O.esc(b[1]) + "</a>";
+    }).join("") + "</div>";
+  }
+  function phoneBar(t) {
+    var cur = screenName();
+    var prodOn = !!(t.features && t.features.production);
+    var fourth = prodOn ? { id: "production", label: "Production", icon: "prod" } : { id: "quotes", label: "Sales", icon: "sales" };
+    var on = function (id) {
+      if (id === "products") return cur === "products" || cur === "grv";
+      if (id === "production") return cur === "production";
+      if (id === "quotes") return cur === "quotes" || cur === "quote" || cur === "invoices" || cur === "invoice" || cur === "orders";
+      return cur === id;
+    };
+    var tab = function (id, label, icon) {
+      return '<a class="phone-tab' + (on(id) ? " on" : "") + '" href="#/preview/' + t.id + "/work/" + id + '">' + ico(icon) + "<span>" + label + "</span></a>";
+    };
+    var logo = t.logoData
+      ? '<img class="phone-logo" src="' + t.logoData + '" alt="">'
+      : '<span class="phone-mark">' + O.esc((t.tradingAs || "O").slice(0, 1)) + "</span>";
+    return '<header class="phone-top">' + logo +
+      '<div class="phone-id"><strong>' + O.esc(t.tradingAs || t.name) + "</strong><span>" + O.esc((t.profile && (t.profile.city || t.profile.province)) || "") + "</span></div>" +
+      '<button class="btn btn-sm btn-secondary" type="button" data-act="logout">Sign out</button></header>' +
+      '<div class="phone-sheet" id="phone-sheet"><button class="phone-sheet-bg" type="button" data-act="phone-more" aria-label="Close menu"></button><div class="phone-sheet-card"><div class="phone-sheet-h"><strong>More</strong><button class="btn btn-sm btn-secondary" type="button" data-act="phone-more">Close</button></div><div class="phone-sheet-links">' + nav(t) + "</div></div></div>" +
+      '<nav class="phone-tabs">' + tab("home", "Home", "home") + tab("products", "Stock", "stock") +
+      '<button type="button" class="phone-tab" data-act="phone-scan" data-id="' + t.id + '">' + ico("scan") + "<span>Scan</span></button>" +
+      tab(fourth.id, fourth.label, fourth.icon) +
+      '<button type="button" class="phone-tab" data-act="phone-more">' + ico("more") + "<span>More</span></button></nav>" +
+      '<button type="button" class="scan-fab" data-act="phone-scan" data-id="' + t.id + '">' + ico("scan") + "<span>Scan</span></button>";
+  }
   function shell(t, body) {
     var session = O.getSession();
     var who = session ? (session.name + (session.email ? " \u00b7 " + session.email : "")) : "";
     document.getElementById("app").innerHTML =
-      '<div class="preview-shell">' +
+      '<div class="preview-shell phone-app">' +
       '<aside class="preview-side" style="background: linear-gradient(180deg, ' + O.esc(t.color || "#3B2F8F") + ' 0%, #0f172a 140%)">' +
       '<div class="brand"><div class="tile" style="background:rgba(255,255,255,0.15);width:36px;height:36px;border-radius:8px;display:grid;place-items:center">' +
       (t.logoData ? '<img src="' + t.logoData + '" alt="" style="width:100%;height:100%;object-fit:contain">' : O.esc((t.tradingAs || t.name || "?").slice(0, 2).toUpperCase())) +
@@ -827,7 +876,7 @@
       '<span class="spacer"></span><span class="tiny">Signed in as ' + O.esc(who) + "</span>" +
       '<button class="btn btn-sm btn-secondary" data-act="logout">Sign out</button>' +
       (session && session.kind === "tenant" ? "" : '<button class="btn btn-sm btn-primary" data-act="exit-preview" data-id="' + t.id + '">Control Centre</button>') +
-      '</div><div class="preview-body">' + body + "</div></div></div>";
+      '</div><div class="preview-body">' + body + "</div></div>" + phoneBar(t) + "</div>";
     var row = document.querySelector(".scan-hit");
     if (row && row.scrollIntoView) row.scrollIntoView({ block: "center" });
   }
@@ -869,7 +918,7 @@
       ["Low stock", String(m.lows), "At or below reorder"]
     ];
     if (t.id === "granite-warehouse" || t.id === "top-quartz") k.splice(2, 0, ["Order book", zar2(m.orderBook), "Slab orders, excl. VAT"]);
-    return moduleTiles(t) +
+    return quickRow(t) + moduleTiles(t) +
       '<div class="preview-dash">' + k.map(function (x) {
         return '<div class="kpi"><div class="label">' + x[0] + '</div><div class="value">' + x[1] + '</div><div class="sub">' + x[2] + "</div></div>";
       }).join("") + "</div>" +
@@ -1388,6 +1437,26 @@
   O.ext.afterReset = function () { draft = null; hit = { kind: "", id: "" }; };
   O.ext.act = function (act, el) {
     var id = el.getAttribute("data-id");
+    if (act === "phone-more") {
+      var sheet = document.getElementById("phone-sheet");
+      if (sheet) sheet.classList.toggle("show");
+      return true;
+    }
+    if (act === "phone-scan") {
+      var ts = O.getTenant(id) || tenant();
+      if (!ts) return true;
+      if (cameraOn(ts)) { openCamera(ts); return true; }
+      var field = document.querySelector(".preview-body [data-scan-field]");
+      if (!field) {
+        O.openModal('<div class="modal-h"><h3>Scan</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><p class="tiny">Camera scan is off. Type a code, or use a handheld scanner.</p><input class="input" id="phone-scan-input" data-scan-field placeholder="SKU, barcode or slab #"></div><div class="modal-f"><button class="btn btn-primary" type="button" data-act="close-modal">Done</button></div>');
+        var typed = document.getElementById("phone-scan-input");
+        if (typed) typed.focus();
+        return true;
+      }
+      field.focus();
+      if (field.scrollIntoView) field.scrollIntoView({ block: "center" });
+      return true;
+    }
     if (act === "print-test") { printCanvas(drawTest()); return true; }
     if (act === "print-test-browser") { browserPrint(drawTest()); return true; }
     if (act === "connect-printer") { connectPrinter(); return true; }
@@ -1543,6 +1612,50 @@
     dr.id = "doc-print-root";
     document.body.appendChild(dr);
   }
+  function dressPhone() {
+    document.querySelectorAll("table.data").forEach(function (table) {
+      if (table.dataset.dressed) return;
+      table.dataset.dressed = "1";
+      var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) { return (th.textContent || "").trim(); });
+      table.querySelectorAll("tbody tr").forEach(function (tr) {
+        var cells = Array.prototype.slice.call(tr.children);
+        cells.forEach(function (td, i) {
+          var label = heads[i] || "";
+          td.setAttribute("data-label", label);
+          if (td.querySelector("button, a.btn")) td.classList.add("phone-actions");
+          if (td.querySelector('input[type="checkbox"]')) td.classList.add("phone-check");
+          if (cells.length > 7 && i > 3 && i < cells.length - 1) td.classList.add("phone-extra");
+        });
+        if (cells.length > 7 && cells[cells.length - 1]) {
+          var more = document.createElement("button");
+          more.type = "button";
+          more.className = "btn btn-secondary phone-more-btn";
+          more.textContent = "More details";
+          more.addEventListener("click", function () {
+            tr.classList.toggle("show-more");
+            more.textContent = tr.classList.contains("show-more") ? "Fewer details" : "More details";
+          });
+          cells[cells.length - 1].appendChild(more);
+        }
+      });
+      var wrap = table.closest(".table-wrap") || table.parentNode;
+      if (wrap && !wrap.querySelector(".phone-filter")) {
+        var input = document.createElement("input");
+        input.className = "input phone-filter";
+        input.type = "search";
+        input.placeholder = "Search";
+        input.setAttribute("aria-label", "Search this list");
+        input.addEventListener("input", function () {
+          var q = input.value.toLowerCase();
+          table.querySelectorAll("tbody tr").forEach(function (row) {
+            row.hidden = !!(q && row.textContent.toLowerCase().indexOf(q) < 0);
+          });
+        });
+        wrap.insertBefore(input, wrap.firstChild);
+      }
+    });
+  }
+  window.OmnivatePhone = { dress: dressPhone };
   window.OmnivateLabels = { geom: geom, drawTest: drawTest, findCode: findCode, cameraOn: cameraOn };
   window.OmnivateDocs = {
     render: renderBizDoc,

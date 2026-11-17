@@ -327,9 +327,12 @@
             "</div>";
         }).join("") + "</div>";
     }).join("");
+    var picker = '<div class="stage-picker">' + STAGES.map(function (st, i) {
+      return '<button type="button" class="stage-chip" data-stage="' + i + '">' + esc(st) + "</button>";
+    }).join("") + "</div>";
     return '<div class="preview-dash">' +
       kpi("m³ received", k.m3) + kpi("m² cut", k.m2cut) + kpi("m² polished", k.m2pol) + kpi("Avg recovery", k.recovery + "%") +
-      '</div><div class="kanban">' + cards + "</div>";
+      "</div>" + picker + '<div class="kanban">' + cards + "</div>";
   }
   function kpi(l, v) { return '<div class="kpi"><div class="label">' + l + '</div><div class="value">' + v + "</div></div>"; }
 
@@ -996,6 +999,13 @@
     shiftNet: shiftNet
   };
 
+  document.addEventListener("click", function (e) {
+    var chip = e.target.closest && e.target.closest(".stage-chip");
+    if (!chip) return;
+    var col = document.querySelectorAll(".kanban-col")[Number(chip.getAttribute("data-stage"))];
+    document.querySelectorAll(".stage-chip").forEach(function (c) { c.classList.toggle("on", c === chip); });
+    if (col && col.scrollIntoView) col.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+  });
   var prevAct = O.ext.act;
   O.ext.act = function (act, el, e) {
     if (window.OmnivateShop.act(act, el, e)) return true;
