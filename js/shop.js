@@ -305,7 +305,7 @@
     if (!prodOn(t)) return '<div class="empty"><h3>Production is off</h3><p>Turn it on under Modules in the Control Centre.</p></div>';
     ensureShop(t);
     var tab = routeParts()[4] || "board";
-    var head = '<div class="page-head"><div><h1>Production</h1><p>Sample quarry-to-slab book. Scan a slab barcode such as GW-B104-1 to move the block on.</p></div></div>' +
+    var head = '<div class="page-head"><div><h1>Production</h1><p>Sample quarry-to-slab book. Scan a slab barcode such as GW-B104-1 to move the block on.</p></div><div class="actions"><a class="printer-chip" id="printer-status" href="#/preview/' + t.id + '/work/labels">' + esc((window.OmnivatePrint && window.OmnivatePrint.statusText()) || "Printer") + "</a></div></div>" +
       tabs(t, "production", tab, [["board", "Board"], ["blocks", "Blocks"], ["cutting", "Cutting"], ["polishing", "Polishing"], ["jobs", "Cut to size"], ["recovery", "Recovery"], ["barcodes", "Barcodes"]]);
     if (tab === "blocks") return head + blocksView(t);
     if (tab === "cutting") return head + cuttingView(t);
@@ -967,6 +967,7 @@
       }
       return false;
     },
+    ready: function (t) { ensureShop(t); },
     weekCalc: weekCalc,
     nightHours: nightHours,
     hoursBetween: hoursBetween,

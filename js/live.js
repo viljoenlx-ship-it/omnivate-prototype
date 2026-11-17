@@ -803,6 +803,7 @@
     if (t.modules.M22) items.push({ id: "quotes", label: "Quotes", on: true });
     if (t.modules.M22 || t.modules.M17) items.push({ id: "invoices", label: "Invoices", on: true });
     if (t.modules.M22 && (t.id === "granite-warehouse" || t.id === "top-quartz")) items.push({ id: "orders", label: "Sales orders", on: true });
+    items.push({ id: "labels", label: "Labels", on: true });
     if (window.OmnivateShop) items = items.concat(window.OmnivateShop.nav(t));
     var cur = screenName();
     return items.filter(function (i) { return i.on !== false; }).map(function (i) {
@@ -829,6 +830,33 @@
     if (row && row.scrollIntoView) row.scrollIntoView({ block: "center" });
   }
 
+  function printerChip(t) {
+    var status = (window.OmnivatePrint && window.OmnivatePrint.statusText()) || printerMsg || "Not connected";
+    return '<a class="printer-chip" href="#/preview/' + t.id + '/work/labels" id="printer-status">' + O.esc(status) + "</a>";
+  }
+  function moduleTiles(t) {
+    if (window.OmnivateShop && window.OmnivateShop.ready) window.OmnivateShop.ready(t);
+    var m = metrics(t);
+    var tiles = [];
+    if (t.modules.M29) tiles.push({ href: "products", icon: "St", name: "Stock", desc: "Slabs and offcuts on hand", num: (t.books.products || []).length + " lines" });
+    if (t.modules.M29) tiles.push({ href: "grv", icon: "GR", name: "Goods received", desc: "Receipts that update stock", num: (t.books.grvs || []).length + " GRVs" });
+    if (t.modules.M22 || t.modules.M23) tiles.push({ href: "customers", icon: "Cu", name: "Customers", desc: "Fabricators, installers and retailers", num: String((t.books.customers || []).length) });
+    if (t.modules.M22) tiles.push({ href: "quotes", icon: "Qu", name: "Quotes", desc: "Open and sent quotations", num: m.openQ + " open" });
+    if (t.modules.M22 || t.modules.M17) tiles.push({ href: "invoices", icon: "In", name: "Invoices", desc: "Tax invoices with 15% VAT", num: (t.books.invoices || []).filter(function (i) { return i.status !== "Paid"; }).length + " unpaid" });
+    if (t.modules.M22 && (t.id === "granite-warehouse" || t.id === "top-quartz")) tiles.push({ href: "orders", icon: "SO", name: "Sales orders", desc: "Wholesale slab order book", num: m.openO + " open" });
+    if (t.features && t.features.production) {
+      var cutting = ((t.books.production && t.books.production.blocks) || []).filter(function (b) { return b.status === "Cutting"; }).length;
+      tiles.push({ href: "production", icon: "Pr", name: "Production", desc: "Blocks, cutting and polishing", num: cutting + " cutting" });
+    }
+    if (t.features && t.features.timesheets) {
+      var clocked = t.books.time && t.books.time.openShifts ? Object.keys(t.books.time.openShifts).length : 0;
+      tiles.push({ href: "timesheets", icon: "Ti", name: "Timesheets", desc: "Shifts, roster and leave", num: clocked + " clocked in" });
+    }
+    tiles.push({ href: "labels", icon: "Lb", name: "Labels & printer", desc: "M2-H size, Bluetooth and USB", num: (window.OmnivatePrint && window.OmnivatePrint.statusText()) || "Not connected" });
+    return '<div class="module-grid">' + tiles.map(function (tile) {
+      return '<a class="module-tile" href="#/preview/' + t.id + "/work/" + tile.href + '"><span class="ic">' + tile.icon + "</span><strong>" + O.esc(tile.name) + '</strong><span class="tiny">' + O.esc(tile.desc) + '</span><span class="num">' + O.esc(String(tile.num)) + "</span></a>";
+    }).join("") + "</div>";
+  }
   function home(t) {
     var m = metrics(t);
     var k = [
@@ -838,8 +866,8 @@
       ["Stock value", zar2(m.stock), "At cost, excl. VAT"],
       ["Low stock", String(m.lows), "At or below reorder"]
     ];
-    if (t.id === "granite-warehouse") k.splice(1, 0, ["Open orders", String(m.openO), "Not marked complete"]);
-    return labelPanel() +
+    if (t.id === "granite-warehouse" || t.id === "top-quartz") k.splice(2, 0, ["Order book", zar2(m.orderBook), "Slab orders, excl. VAT"]);
+    return moduleTiles(t) +
       '<div class="preview-dash">' + k.map(function (x) {
         return '<div class="kpi"><div class="label">' + x[0] + '</div><div class="value">' + x[1] + '</div><div class="sub">' + x[2] + "</div></div>";
       }).join("") + "</div>" +
@@ -849,8 +877,8 @@
 
   function products(t) {
     var columns = cols(t, "M29", "Item master", PRODUCT_MAP);
-    return labelPanel() +
-      '<div class="page-head"><div><h1>Stock</h1><p>Prices include 15% VAT. Scan a SKU or barcode. Tick rows to print several labels.</p></div><div class="actions">' +
+    return '<div class="page-head"><div><h1>Stock</h1><p>Prices include 15% VAT. Scan a SKU or barcode. Tick rows to print several labels.</p></div><div class="actions">' +
+      printerChip(t) +
       '<button class="btn btn-sm btn-primary" data-act="print-selected" data-id="' + t.id + '">Print selected labels</button>' + cameraBtn(t) + "</div></div>" +
       scanBar("Focus this box, or click the page background and scan. Enter looks the item up.") +
       '<div class="card">' + table(columns, t.books.products, function (p) { return productRow(t, columns, p); }, true) + "</div>";
@@ -933,7 +961,7 @@
         '<button class="btn btn-sm btn-primary" data-act="print-grv" data-id="' + t.id + '" data-grv="' + O.esc(g.id) + '">Print all labels</button></td></tr>';
     }).join("");
     var opts = t.books.products.map(function (p) { return '<option value="' + O.esc(p.id) + '">' + O.esc(p.sku + " · " + p.name) + "</option>"; }).join("");
-    return '<div class="page-head"><div><h1>Goods received</h1><p>A posted GRV adds the received quantity to stock. Print all labels uses that quantity, and you can change it before printing.</p></div></div>' +
+    return '<div class="page-head"><div><h1>Goods received</h1><p>A posted GRV adds the received quantity to stock. Print all labels uses that quantity, and you can change it before printing.</p></div><div class="actions">' + printerChip(t) + "</div></div>" +
       '<div class="card" style="margin-bottom:12px"><div class="table-wrap"><table class="data"><thead><tr><th>GRV</th><th>Date</th><th>Supplier</th><th>Lines</th><th>Units</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="7">No receipts yet.</td></tr>') + "</tbody></table></div></div>" +
       '<form class="card" data-act="save-grv" data-id="' + t.id + '"><div class="card-b"><h2>New receipt</h2><div class="form-grid">' +
@@ -946,8 +974,7 @@
   }
   function orders(t) {
     if (!t.modules.M22) return '<div class="empty"><h3>Sales is turned off</h3><p>Enable the Sales module in the Control Centre.</p></div>';
-    return '<div class="page-head"><div><h1>Sales orders</h1><p>Wholesale slabs and offcuts for fabricators. Order book ' + zar2(metrics(t).orderBook) + '. Scan S1040 or SO4716.</p></div><div class="actions">' + cameraBtn(t) + "</div></div>" +
-      labelPanel() +
+    return '<div class="page-head"><div><h1>Sales orders</h1><p>Wholesale slabs and offcuts for fabricators. Order book ' + zar2(metrics(t).orderBook) + '. Scan S1040 or SO4716.</p></div><div class="actions">' + printerChip(t) + cameraBtn(t) + "</div></div>" +
       scanBar("Handheld wedge works even when this box is not focused, as long as you are not typing in another field.") +
       '<div class="card">' + ordersTable(t) + "</div>";
   }
@@ -973,6 +1000,7 @@
     }
     if (s === "orders") return orders(t);
     if (s === "grv") return t.modules.M29 ? grvView(t) : off("Inventory");
+    if (s === "labels") return '<div class="page-head"><div><h1>Labels & printer</h1><p>Size, Bluetooth, USB and a test label for the M2-H.</p></div></div>' + labelPanel();
     if (window.OmnivateShop) {
       var shopHtml = window.OmnivateShop.body(t, s);
       if (shopHtml != null) return shopHtml;
