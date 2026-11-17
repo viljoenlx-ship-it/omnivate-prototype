@@ -14,6 +14,8 @@ Omnivate staff (`@omnivate.co.za`) open the Control Centre. A tenant user never 
 
 **Production** is on for The Granite Warehouse and off for Top Quartz. **Timesheets** (shifts, roster, leave, BCEA pay) are on for both. Switch them on the tenant Modules tab; each change is written to the audit log.
 
-NIIMBOT M2-H labels default to **50 × 15 mm**, **591 × 177 px** at 300 dpi. Width is across the printhead; height is the feed (half of a 50×30 label). Print test label draws a border on the exact bitmap edge. Close the NIIMBOT phone app before connecting — only one Bluetooth link at a time.
+NIIMBOT M2-H labels default to **50 × 15 mm**, **591 × 177 px** at 300 dpi. Width is across the printhead; height is the feed (half of a 50×30 label). Print test label draws a border on the exact bitmap edge. Connect with **Connect via Bluetooth** or **Connect via USB** (Chrome/Edge, 115200 baud). On Windows, install the CH340/CH341 USB-serial driver if the printer does not appear as a COM port. Close the NIIMBOT phone app first — only one link at a time.
+
+Goods received (GRV) is under Stock. **Print all labels** asks you to confirm the quantity per line, then prints that many labels with a progress bar, pause, and retry. The same queue is on multi-selected stock rows and on **Print all slab labels** for a production block.
 
 Reset demo data on the Fleet page restores this seed.

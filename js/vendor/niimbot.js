@@ -262,7 +262,15 @@
       logAlways(`⚠ WRITE_MODE="fast" overrides ${meta.label}, which NEEDS pacing (${meta.dpi} dpi: it drops rows on an unpaced burst). Obeying — expect blank or short labels. This is a diagnostic, not a setting.`);
     }
   }
+  // Optional byte transport. USB (Web Serial) sets this so the same framed
+  // packets go out at 115200 baud instead of a BLE characteristic write.
+  let io = null;
+  let rxBuf = [];
   async function writeRaw(bytes) {
+    if (io && io.write) {
+      await io.write(bytes);
+      return;
+    }
     const mode = effectiveWriteMode();
     if (mode === "acked") { await characteristic.writeValueWithResponse(bytes); return; }
     // writeValueWithoutResponse pode estourar o buffer BLE em rajada — retry curto.
@@ -518,8 +526,39 @@
     }
   }
 
+  function ingestSerial(bytes) {
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    for (let i = 0; i < u8.length; i++) rxBuf.push(u8[i]);
+    if (rxBuf.length > 8192) rxBuf = rxBuf.slice(-4096);
+    while (rxBuf.length >= 7) {
+      if (rxBuf[0] !== 0x55 || rxBuf[1] !== 0x55) { rxBuf.shift(); continue; }
+      const len = rxBuf[3];
+      const total = 7 + len;
+      if (rxBuf.length < total) return;
+      const frame = new Uint8Array(rxBuf.splice(0, total));
+      if (frame[total - 2] !== 0xaa || frame[total - 1] !== 0xaa) continue;
+      onNotify({ target: { value: new DataView(frame.buffer) } });
+    }
+  }
+  async function connectSerial(model) {
+    device = { name: (io && io.name) || "USB serial", gatt: { connected: true, disconnect: function () {} } };
+    characteristic = { properties: { write: true, writeWithoutResponse: true } };
+    writeMode = "fast";
+    _bundleAllowed = true;
+    logAlways("transport=usb baud=115200 framing=55 55 .. aa aa");
+    await writeRaw(new Uint8Array([0x03, 0x55, 0x55, 0xc1, 0x01, 0x01, 0xc1, 0xaa, 0xaa]));
+    await sleep(200);
+    await detectPrinter();
+    const meta = (printerInfo && printerInfo.modelId != null) ? MODEL_IDS[printerInfo.modelId] : null;
+    const task = (meta && meta.task) || (model && model.task);
+    const needsPacing = meta ? !!meta.paced : (task === "b1");
+    writeMode = needsPacing ? "paced" : "fast";
+    _bundleAllowed = !!(meta && meta.bundle);
+    if (task === "b1") await b1Handshake();
+  }
   async function connect(model) {
     if (characteristic && device && device.gatt.connected) return;
+    if (io && io.kind === "serial") return connectSerial(model);
     logMsg(`Niimbot ${VERSION} — connecting (task=${(model && model.task) || "?"})`);
     // `!navigator.bluetooth` has two different causes and they need different advice.
     // `isSecureContext` is what the browser itself gates the API on, so it is the
@@ -602,9 +641,20 @@
   // Drop the BLE connection so a different printer can be paired/identified. Clears
   // all connection state (incl. the detected printerInfo); the next print reconnects.
   async function disconnect() {
-    try { if (device && device.gatt && device.gatt.connected) device.gatt.disconnect(); }
+    const closing = io;
+    const dev = device;
+    io = null;
+    characteristic = null;
+    device = null;
+    pendingQueue = [];
+    lastUnsolicited = null;
+    printerInfo = null;
+    rxBuf = [];
+    if (closing && closing.close) {
+      try { await closing.close(); } catch (e) { /* already gone */ }
+    }
+    try { if (dev && dev.gatt && dev.gatt.connected && dev.gatt.disconnect) dev.gatt.disconnect(); }
     catch (e) { /* already gone */ }
-    characteristic = null; device = null; pendingQueue = []; lastUnsolicited = null; printerInfo = null;
     logMsg("disconnected");
   }
 
@@ -1520,6 +1570,9 @@
     // wired into any print path.
     battery,
     connect, disconnect, printImage, printBatch,
+    ingestSerial,
+    setTransport(next) { io = next || null; rxBuf = []; if (!next) { characteristic = null; device = null; } },
+    transportKind() { return io && io.kind === "serial" ? "usb" : (device && device.gatt && device.gatt.connected ? "bluetooth" : ""); },
   };
   } // createInstance
 

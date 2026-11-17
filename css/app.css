@@ -996,6 +996,9 @@ tr.scan-hit { background: #F0FDFA; outline: 2px solid #14B8A6; }
 .clock-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0; }
 .clock-card { border: 1px solid var(--border); border-radius: 12px; padding: 12px; background: #fff; display: flex; flex-direction: column; gap: 8px; }
 .btn-lg { min-height: 48px; font-size: 16px; }
+.queue-list { display: flex; flex-direction: column; gap: 10px; max-height: 50vh; overflow: auto; }
+.queue-row { display: flex; gap: 12px; align-items: center; }
+@media (max-width: 700px) { .queue-row { flex-direction: column; align-items: stretch; } }
 @media (max-width: 800px) { .clock-row { grid-template-columns: 1fr 1fr; } .kanban-col { min-width: 78vw; } }
 @media print {
   body.printing-doc > *:not(#doc-print-root) { display: none !important; }

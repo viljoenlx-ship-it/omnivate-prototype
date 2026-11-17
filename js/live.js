@@ -206,10 +206,12 @@
       O.toast("Web Bluetooth needs Chrome or Edge on HTTPS. On Android turn Bluetooth and Location on.", "warn");
       return;
     }
-    printerMsg = "Choose the M2_H\u2026";
+    printerMsg = "Choose the M2_H over Bluetooth\u2026";
+    if (window.Niimbot.transportKind && window.Niimbot.transportKind() === "usb") window.Niimbot.disconnect();
     window.Niimbot.connect(M2H).then(function () {
+      if (window.OmnivatePrint) window.OmnivatePrint.rememberBluetooth();
       var info = window.Niimbot.printer;
-      printerMsg = info ? ("Connected \u00b7 " + info.label + " (id " + info.modelId + ")") : "Connected";
+      printerMsg = info ? ("Bluetooth \u00b7 " + info.label + " (id " + info.modelId + ")") : "Bluetooth \u00b7 connected";
       O.toast(printerMsg, "ok");
       var el = document.getElementById("printer-status");
       if (el) el.textContent = printerMsg;
@@ -443,10 +445,25 @@
     }
     return { seed: SEED, products: [P(t.id.toUpperCase().slice(0, 4) + "-ITEM", "Sample item", 100, 60, 10, 2, "each")], customers: [C("C1", "Sample customer", t.profile && t.profile.city, true)], quotes: [], invoices: [], orders: [] };
   }
+  function makeGrvs(products, prefix) {
+    function line(index, qty) {
+      var p = products[index] || products[0];
+      return { productId: p.id, qty: qty, cost: excl(p.costIncl) };
+    }
+    return [
+      { id: prefix + "-grv1", number: prefix + "-GRV-104", supplier: "Sample: Northern Slate & Stone", date: "2026-11-08", posted: true, lines: [line(0, 6), line(1, 2)] },
+      { id: prefix + "-grv2", number: prefix + "-GRV-105", supplier: "Sample: Kalahari Two Stone", date: "2026-11-12", posted: true, lines: [line(2, 4)] },
+      { id: prefix + "-grv3", number: prefix + "-GRV-106", supplier: "Sample: Pietersburg Grey Quarry", date: "2026-11-15", posted: true, lines: [line(3, 3), line(4, 1)] }
+    ];
+  }
   function ensureBooks(t) {
     if (!t) return null;
     if (!t.books || t.books.seed !== SEED) {
       t.books = seedBooks(t);
+      O.persist();
+    }
+    if (!t.books.grvs) {
+      t.books.grvs = makeGrvs(t.books.products || [], t.id === "granite-warehouse" ? "GW" : "TQ");
       O.persist();
     }
     return t.books;
@@ -587,7 +604,7 @@
     return '<div class="card" style="margin-bottom:12px"><div class="card-b">' +
       '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">' +
       "<div><strong>Label size</strong><div class=\"tiny\">M2-H default 50 mm across the printhead \u00d7 15 mm feed. Bitmap " + s.w_px + " \u00d7 " + s.h_px + " px at 300 dpi (same 50 mm width as a 50\u00d730 label, half the height).</div></div>" +
-      '<span class="badge badge-teal" id="printer-status">' + O.esc(printerMsg) + "</span></div>" +
+      '<span class="badge badge-teal" id="printer-status">' + O.esc(window.OmnivatePrint && window.OmnivatePrint.statusText() !== "Not connected" ? window.OmnivatePrint.statusText() : printerMsg) + "</span></div>" +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">' +
       presetBtn(50, 15) + presetBtn(50, 30) + presetBtn(50, 25) + presetBtn(40, 30) + presetBtn(30, 15) +
       "</div>" +
@@ -603,9 +620,10 @@
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
       '<button class="btn btn-sm btn-primary" data-act="print-test">Print test label</button>' +
       '<button class="btn btn-sm btn-secondary" data-act="print-test-browser">Test via computer</button>' +
-      '<button class="btn btn-sm btn-secondary" data-act="connect-printer">Connect printer</button>' +
+      '<button class="btn btn-sm btn-secondary" data-act="connect-printer">Connect via Bluetooth</button>' +
+      '<button class="btn btn-sm btn-secondary" data-act="connect-usb">Connect via USB</button>' +
       "</div>" +
-      '<p class="tiny" style="margin-top:8px">The test draws a black box on the exact edge of the ' + s.w_px + "\u00d7" + s.h_px + " bitmap. Nudge offset X/Y if the box does not sit on the label. Close the NIIMBOT phone app before connecting.</p>" +
+      '<p class="tiny" style="margin-top:8px">The test draws a black box on the exact edge of the ' + s.w_px + "\u00d7" + s.h_px + " bitmap. Nudge offset X/Y if the box does not sit on the label. Last link: " + O.esc((window.OmnivatePrint && window.OmnivatePrint.lastLink()) || "none") + ". Close the NIIMBOT phone app before connecting — only one link at a time. USB uses Chrome or Edge at 115200 baud (same 55 55 … aa aa frames as Bluetooth). On Windows, install the CH340/CH341 USB-serial driver if the M2-H does not appear as a COM port.</p>" +
       "</div></div>";
   }
   function presetBtn(w, h) {
@@ -676,8 +694,9 @@
     return O.esc(p[key] || "");
   }
 
-  function table(columns, rows, rowHtml) {
+  function table(columns, rows, rowHtml, lead) {
     return '<div class="table-wrap"><table class="data"><thead><tr>' +
+      (lead ? "<th></th>" : "") +
       columns.map(function (c) { return "<th" + (c.align ? ' class="' + c.align + '"' : "") + ">" + O.esc(c.label) + "</th>"; }).join("") +
       "<th></th></tr></thead><tbody>" +
       (rows.map(rowHtml).join("") || '<tr><td colspan="' + (columns.length + 1) + '"><div class="empty">Nothing here yet.</div></td></tr>') +
@@ -686,6 +705,7 @@
 
   function productRow(t, columns, p) {
     return '<tr class="' + (hit.kind === "product" && hit.id === p.id ? "scan-hit" : "") + '" data-product="' + O.esc(p.id) + '">' +
+      '<td><input type="checkbox" class="pick-product" value="' + O.esc(p.id) + '" aria-label="Select ' + O.esc(p.sku) + '"></td>' +
       columns.map(function (c) {
         var html = c.key === "name" ? (O.esc(p.name) + (low(p) ? ' <span class="badge badge-warning">Low stock</span>' : "")) : cell(p, c.key);
         return "<td" + (c.align ? ' class="' + c.align + '"' : "") + ">" + html + "</td>";
@@ -779,6 +799,7 @@
   function nav(t) {
     var items = [{ id: "home", label: "Home", on: true }];
     if (t.modules.M29) items.push({ id: "products", label: "Stock", on: true });
+    if (t.modules.M29) items.push({ id: "grv", label: "GRV", on: true });
     if (t.modules.M22 || t.modules.M23) items.push({ id: "customers", label: "Customers", on: true });
     if (t.modules.M22) items.push({ id: "quotes", label: "Quotes", on: true });
     if (t.modules.M22 || t.modules.M17) items.push({ id: "invoices", label: "Invoices", on: true });
@@ -829,9 +850,10 @@
   function products(t) {
     var columns = cols(t, "M29", "Item master", PRODUCT_MAP);
     return labelPanel() +
-      '<div class="page-head"><div><h1>Stock</h1><p>Prices include 15% VAT. Scan a SKU or barcode.</p></div><div class="actions">' + cameraBtn(t) + "</div></div>" +
+      '<div class="page-head"><div><h1>Stock</h1><p>Prices include 15% VAT. Scan a SKU or barcode. Tick rows to print several labels.</p></div><div class="actions">' +
+      '<button class="btn btn-sm btn-primary" data-act="print-selected" data-id="' + t.id + '">Print selected labels</button>' + cameraBtn(t) + "</div></div>" +
       scanBar("Focus this box, or click the page background and scan. Enter looks the item up.") +
-      '<div class="card">' + table(columns, t.books.products, function (p) { return productRow(t, columns, p); }) + "</div>";
+      '<div class="card">' + table(columns, t.books.products, function (p) { return productRow(t, columns, p); }, true) + "</div>";
   }
 
   function customers(t) {
@@ -903,6 +925,25 @@
       "</div></form>";
   }
 
+  function grvView(t) {
+    ensureBooks(t);
+    var rows = (t.books.grvs || []).map(function (g) {
+      var qty = g.lines.reduce(function (s, l) { return s + (Number(l.qty) || 0); }, 0);
+      return "<tr><td class=\"mono\">" + O.esc(g.number) + "</td><td>" + O.esc(g.date) + "</td><td>" + O.esc(g.supplier) + "</td><td>" + g.lines.length + "</td><td>" + qty + "</td><td>" + (g.posted ? "Posted" : "Draft") + "</td><td>" +
+        '<button class="btn btn-sm btn-primary" data-act="print-grv" data-id="' + t.id + '" data-grv="' + O.esc(g.id) + '">Print all labels</button></td></tr>';
+    }).join("");
+    var opts = t.books.products.map(function (p) { return '<option value="' + O.esc(p.id) + '">' + O.esc(p.sku + " · " + p.name) + "</option>"; }).join("");
+    return '<div class="page-head"><div><h1>Goods received</h1><p>A posted GRV adds the received quantity to stock. Print all labels uses that quantity, and you can change it before printing.</p></div></div>' +
+      '<div class="card" style="margin-bottom:12px"><div class="table-wrap"><table class="data"><thead><tr><th>GRV</th><th>Date</th><th>Supplier</th><th>Lines</th><th>Units</th><th>Status</th><th></th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="7">No receipts yet.</td></tr>') + "</tbody></table></div></div>" +
+      '<form class="card" data-act="save-grv" data-id="' + t.id + '"><div class="card-b"><h2>New receipt</h2><div class="form-grid">' +
+      '<div class="field"><label>Supplier</label><input class="input" name="supplier" placeholder="Sample supplier" required></div>' +
+      '<div class="field"><label>Date</label><input class="input" type="date" name="date" value="' + new Date().toISOString().slice(0, 10) + '"></div>' +
+      '<div class="field"><label>Product</label><select class="select" name="product">' + opts + "</select></div>" +
+      '<div class="field"><label>Qty received</label><input class="input" type="number" min="1" name="qty" value="1"></div>' +
+      '<div class="field"><label>Cost each excl. VAT</label><input class="input" type="number" min="0" step="0.01" name="cost" value="0"></div>' +
+      "</div><button class=\"btn btn-primary\" type=\"submit\">Post GRV and update stock</button></div></form>";
+  }
   function orders(t) {
     if (!t.modules.M22) return '<div class="empty"><h3>Sales is turned off</h3><p>Enable the Sales module in the Control Centre.</p></div>';
     return '<div class="page-head"><div><h1>Sales orders</h1><p>Sample yard book. Scan a slab number (S1040) or order (SO4716). Columns follow the Control Centre.</p></div><div class="actions">' + cameraBtn(t) + "</div></div>" +
@@ -931,6 +972,7 @@
       return '<h1 style="font-size:20px;margin-bottom:8px">' + O.esc(draft.number || "Invoice") + "</h1>" + docEditor(t, "invoice");
     }
     if (s === "orders") return orders(t);
+    if (s === "grv") return t.modules.M29 ? grvView(t) : off("Inventory");
     if (window.OmnivateShop) {
       var shopHtml = window.OmnivateShop.body(t, s);
       if (shopHtml != null) return shopHtml;
@@ -1108,6 +1150,43 @@
     if (act === "print-test") { printCanvas(drawTest()); return true; }
     if (act === "print-test-browser") { browserPrint(drawTest()); return true; }
     if (act === "connect-printer") { connectPrinter(); return true; }
+    if (act === "connect-usb") {
+      if (!window.OmnivatePrint) return true;
+      window.OmnivatePrint.connectUsb().then(function () {
+        printerMsg = window.OmnivatePrint.statusText();
+        O.toast(printerMsg, "ok");
+      }).catch(function (err) {
+        var msg = (err && err.message) || String(err);
+        if (/cancel|NotFound/i.test(msg)) msg = "No USB port selected.";
+        printerMsg = msg;
+        O.toast(msg, "err");
+        var el = document.getElementById("printer-status");
+        if (el) el.textContent = msg;
+      });
+      return true;
+    }
+    if (act === "print-selected") {
+      var ts = O.getTenant(id); ensureBooks(ts);
+      var ids = Array.prototype.map.call(document.querySelectorAll(".pick-product:checked"), function (box) { return box.value; });
+      if (!ids.length) { O.toast("Tick at least one product", "warn"); return true; }
+      var items = ids.map(function (pid) {
+        var p = prod(ts, pid);
+        return { title: p.sku + " · " + p.name, url: drawProductLabel(ts, p).toDataURL("image/png"), copies: 1 };
+      });
+      window.OmnivatePrint.openReview("Print selected labels", items);
+      return true;
+    }
+    if (act === "print-grv") {
+      var tg = O.getTenant(id); ensureBooks(tg);
+      var grv = (tg.books.grvs || []).find(function (g) { return g.id === el.getAttribute("data-grv"); });
+      if (!grv) return true;
+      var batch = grv.lines.map(function (l) {
+        var p = prod(tg, l.productId);
+        return { title: (p ? p.sku : l.productId) + " · received " + l.qty, url: drawProductLabel(tg, p).toDataURL("image/png"), copies: l.qty || 1 };
+      }).filter(function (x) { return x.url; });
+      window.OmnivatePrint.openReview(grv.number + " labels", batch);
+      return true;
+    }
     if (act === "label-preset") {
       saveLabel({ wMm: Number(el.getAttribute("data-w")), hMm: Number(el.getAttribute("data-h")) });
       O.render({ keepScroll: true });
@@ -1172,6 +1251,28 @@
     return false;
   };
   O.ext.submit = function (act, form) {
+    if (act === "save-grv") {
+      var tg = O.getTenant(form.getAttribute("data-id"));
+      ensureBooks(tg);
+      var val = function (n) { return form.elements[n] ? form.elements[n].value : ""; };
+      var qty = Math.max(1, Number(val("qty")) || 1);
+      var grv = {
+        id: O.uid("grv"),
+        number: (tg.id === "granite-warehouse" ? "GW" : "TQ") + "-GRV-" + (1000 + (tg.books.grvs.length + 1)),
+        supplier: val("supplier") || "Sample supplier",
+        date: val("date") || new Date().toISOString().slice(0, 10),
+        posted: true,
+        lines: [{ productId: val("product"), qty: qty, cost: Number(val("cost")) || 0 }]
+      };
+      var p = prod(tg, grv.lines[0].productId);
+      if (p) p.onHand = round2((Number(p.onHand) || 0) + qty);
+      tg.books.grvs.unshift(grv);
+      O.persist();
+      O.pushAudit({ tenantId: tg.id, action: "GRV posted", target: grv.number, before: p ? String(p.onHand - qty) : "—", after: p ? String(p.onHand) + " on hand" : "posted" });
+      O.toast(grv.number + " posted, stock updated", "ok");
+      O.render();
+      return true;
+    }
     if (act !== "save-doc") return false;
     var t = O.getTenant(form.getAttribute("data-id"));
     saveDoc(t, form.getAttribute("data-kind"));

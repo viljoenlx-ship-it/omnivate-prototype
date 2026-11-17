@@ -397,7 +397,8 @@
       for (var i = 1; i <= Math.min(n, 8); i++) {
         labels += '<button class="btn btn-sm btn-secondary" data-act="print-slab" data-id="' + t.id + '" data-block="' + esc(b.blockId) + '" data-n="' + i + '">' + esc(b.blockId) + "-" + i + "</button> ";
       }
-      return "<div style=\"margin-bottom:10px\"><strong>" + esc(b.blockId) + "</strong> " + esc(b.material) + "<div>" + labels + "</div></div>";
+      return "<div style=\"margin-bottom:10px\"><strong>" + esc(b.blockId) + "</strong> " + esc(b.material) +
+        ' <button class="btn btn-sm btn-primary" data-act="print-block-labels" data-id="' + t.id + '" data-block="' + esc(b.blockId) + '">Print all slab labels</button><div>' + labels + "</div></div>";
     }).join("");
     return '<p class="tiny">Each slab is blockID-n. Print uses the M2-H 50×15 mm label (591×177 px unless you changed Label size). A handheld scan of that code advances the block.</p>' + blocks;
   }
@@ -845,6 +846,18 @@
       if (act === "advance-block" && t) {
         var b = blockOf(t, el.getAttribute("data-block"));
         if (b) { advanceBlock(t, b); O.render(); }
+        return true;
+      }
+      if (act === "print-block-labels" && t) {
+        var whole = blockOf(t, el.getAttribute("data-block"));
+        if (whole && window.OmnivatePrint) {
+          var count = Math.max(1, cutsFor(t, whole.blockId).reduce(function (s, c) { return s + (c.qty || 0); }, 0) || 4);
+          var batch = [];
+          for (var n = 1; n <= Math.min(count, 24); n++) {
+            batch.push({ title: whole.blockId + "-" + n, url: drawSlab(t, whole, n).toDataURL("image/png"), copies: 1 });
+          }
+          window.OmnivatePrint.openReview(whole.blockId + " slabs", batch);
+        }
         return true;
       }
       if (act === "print-slab" && t) {
