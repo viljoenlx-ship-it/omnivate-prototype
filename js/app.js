@@ -11,7 +11,33 @@
   function screensFor(moduleCode) {
     return SCREENS.filter((s) => s.moduleCode === moduleCode);
   }
+  var SLAB_ORDER_COLS = [
+    { id: "M22::Slab orders::date", name: "Date", dataType: "Date", example: "2026-11-12" },
+    { id: "M22::Slab orders::customer", name: "Customer", dataType: "Text", example: "Sample Memorials" },
+    { id: "M22::Slab orders::order", name: "Order no.", dataType: "Text", example: "SO4716" },
+    { id: "M22::Slab orders::type", name: "Stock type", dataType: "Enum", example: "SLABS" },
+    { id: "M22::Slab orders::L", name: "L cm", dataType: "Decimal", example: "280" },
+    { id: "M22::Slab orders::W", name: "W cm", dataType: "Decimal", example: "160" },
+    { id: "M22::Slab orders::T", name: "T cm", dataType: "Decimal", example: "3" },
+    { id: "M22::Slab orders::qty", name: "Qty", dataType: "Decimal", example: "1" },
+    { id: "M22::Slab orders::slab", name: "Slab #", dataType: "Text", example: "S-1044" },
+    { id: "M22::Slab orders::grade", name: "Grade", dataType: "Enum", example: "CL" },
+    { id: "M22::Slab orders::m2", name: "m²", dataType: "Decimal", example: "4.48" },
+    { id: "M22::Slab orders::m3", name: "m³", dataType: "Decimal", example: "0.134" },
+    { id: "M22::Slab orders::kg", name: "kg", dataType: "Decimal", example: "403" },
+    { id: "M22::Slab orders::colour", name: "Colour code", dataType: "Text", example: "RTB Rustenburg Black" },
+    { id: "M22::Slab orders::finish", name: "Finish", dataType: "Enum", example: "T/P" },
+    { id: "M22::Slab orders::disc", name: "Discount %", dataType: "Percent", example: "5" },
+    { id: "M22::Slab orders::price", name: "Price", dataType: "Currency", example: "2450" },
+    { id: "M22::Slab orders::unit", name: "Price unit", dataType: "Enum", example: "per m²" },
+    { id: "M22::Slab orders::total", name: "Line total", dataType: "Currency", example: "10427" },
+    { id: "M22::Slab orders::transport", name: "Transport", dataType: "Currency", example: "850" },
+    { id: "M22::Slab orders::sage", name: "Sage invoice", dataType: "Text", example: "SI88421" },
+    { id: "M22::Slab orders::prod", name: "Production", dataType: "Boolean", example: "Yes" },
+    { id: "M22::Slab orders::done", name: "Complete", dataType: "Boolean", example: "No" }
+  ];
   function columnsFor(moduleCode, screenName) {
+    if (screenName === "Slab orders") return SLAB_ORDER_COLS.map((c) => Object.assign({}, c));
     return CATALOGUE.columnsByScreen[moduleCode + "::" + screenName] || [];
   }
   function sectionForColumn(col) {
@@ -234,6 +260,103 @@
   function T(partial) {
     return partial;
   }
+  function stoneTenants() {
+    const shell = (partial) => Object.assign({
+      hosting: "Shared",
+      cluster: "jhb-shared-02",
+      status: "healthy",
+      version: "2.4.1",
+      channel: "stable",
+      plan: "growth",
+      mrr: 6900,
+      usersCount: 3,
+      lastBackup: "2026-11-16T21:40:00+02:00",
+      alerts: [],
+      logoData: null,
+      offlineReady: true,
+      permissions: defaultPermissions(),
+      columnOverrides: {},
+      sectionOverrides: {},
+      features: { cameraScan: false, handheldScan: true },
+      modules: moduleMap([...CORE_MODULES, "M09", "M15", "M17", "M18", "M22", "M23", "M27", "M29", "M30"])
+    }, partial);
+    return [
+      shell({
+        id: "top-quartz",
+        name: "Top Quartz",
+        tradingAs: "Top Quartz",
+        industry: "Granite, engineered stone and porcelain slabs",
+        region: "Johannesburg",
+        color: "#9A3412",
+        whatsapp: { invoices: true, payments: true, approvals: false, backups: false, marketing: false, number: "" },
+        profile: {
+          legalName: "Top Quartz",
+          tradingAs: "Top Quartz",
+          registrationNumber: "",
+          vatNumber: "",
+          bbbee: "",
+          email: "",
+          phone: "",
+          website: "",
+          address1: "3 Copper Road",
+          address2: "Spartan",
+          city: "Kempton Park",
+          postal: "1619",
+          province: "Gauteng",
+          country: "South Africa",
+          currency: "ZAR",
+          fiscalYearStart: "01 March",
+          terminology: { Customer: "Customer", Supplier: "Supplier", Item: "Product", Employee: "Employee" },
+          sequences: [
+            { doc: "Sales quotation", prefix: "TQ-QT-", pad: 4, next: 1047 },
+            { doc: "Sales invoice", prefix: "TQ-INV-", pad: 4, next: 2206 }
+          ],
+          templates: { invoice: "Top Quartz tax invoice", quote: "Top Quartz quotation", statement: "Standard statement", payslip: "Standard payslip" }
+        },
+        users: [
+          { id: "tq-admin", name: "Top Quartz admin", email: "admin@topquartz.demo", role: "administrator", status: "Active", lastLogin: "2026-11-17T07:40:00+02:00", mfa: true, password: "Demo@123" }
+        ],
+        compliance: defaultCompliance({ name: "", email: "", phone: "", registered: false })
+      }),
+      shell({
+        id: "granite-warehouse",
+        name: "The Granite Warehouse",
+        tradingAs: "The Granite Warehouse",
+        industry: "Stone slab retail and supply",
+        region: "Johannesburg",
+        color: "#334155",
+        whatsapp: { invoices: true, payments: true, approvals: false, backups: false, marketing: false, number: "" },
+        profile: {
+          legalName: "The Granite Warehouse",
+          tradingAs: "The Granite Warehouse",
+          registrationNumber: "",
+          vatNumber: "",
+          bbbee: "",
+          email: "",
+          phone: "",
+          website: "",
+          address1: "",
+          address2: "",
+          city: "",
+          postal: "",
+          province: "Gauteng",
+          country: "South Africa",
+          currency: "ZAR",
+          fiscalYearStart: "01 March",
+          terminology: { Customer: "Customer", Supplier: "Supplier", Item: "Slab", Employee: "Employee" },
+          sequences: [
+            { doc: "Sales quotation", prefix: "GW-QT-", pad: 4, next: 881 },
+            { doc: "Sales invoice", prefix: "GW-INV-", pad: 4, next: 1544 }
+          ],
+          templates: { invoice: "Granite Warehouse tax invoice", quote: "Granite Warehouse quotation", statement: "Standard statement", payslip: "Standard payslip" }
+        },
+        users: [
+          { id: "gw-admin", name: "Granite Warehouse admin", email: "admin@granitewarehouse.demo", role: "administrator", status: "Active", lastLogin: "2026-11-17T07:55:00+02:00", mfa: true, password: "Demo@123" }
+        ],
+        compliance: defaultCompliance({ name: "", email: "", phone: "", registered: false })
+      })
+    ];
+  }
   function buildTenants() {
     const mkUsers = (rows) => rows.map((r, i) => ({
       id: r.id,
@@ -245,6 +368,7 @@
       mfa: r.mfa !== false
     }));
     const tenants = [
+      ...stoneTenants(),
       T({
         id: "horizon",
         name: "Horizon Plastics (Pty) Ltd",
@@ -808,6 +932,57 @@
     if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
     else sessionStorage.removeItem(SESSION_KEY);
   }
+  function ensureDemoUsers() {
+    const specs = {
+      "top-quartz": { id: "tq-admin", name: "Top Quartz admin", email: "admin@topquartz.demo" },
+      "granite-warehouse": { id: "gw-admin", name: "Granite Warehouse admin", email: "admin@granitewarehouse.demo" }
+    };
+    Object.keys(specs).forEach((id) => {
+      const t = getTenant(id);
+      if (!t) return;
+      const spec = specs[id];
+      t.users = t.users || [];
+      let u = t.users.find((x) => String(x.email || "").toLowerCase() === spec.email);
+      if (!u) {
+        u = { id: spec.id, name: spec.name, email: spec.email, role: "administrator", status: "Active", lastLogin: null, mfa: true, password: "Demo@123" };
+        t.users.unshift(u);
+      }
+      if (!u.password) u.password = "Demo@123";
+      if (!u.role) u.role = "administrator";
+    });
+  }
+  function ensureScanFeatures() {
+    for (const t of state.tenants) {
+      t.features = t.features || {};
+      if (typeof t.features.cameraScan !== "boolean") t.features.cameraScan = false;
+      t.features.handheldScan = true;
+      if (typeof t.features.production !== "boolean") t.features.production = t.id === "granite-warehouse";
+      if (typeof t.features.timesheets !== "boolean") t.features.timesheets = t.id === "top-quartz" || t.id === "granite-warehouse";
+    }
+  }
+  function ensureStoneTenants() {
+    const byId = Object.fromEntries(state.tenants.map((t) => [t.id, t]));
+    const head = stoneTenants().map((t) => byId[t.id] || t);
+    const rest = state.tenants.filter((t) => t.id !== "top-quartz" && t.id !== "granite-warehouse");
+    state.tenants = head.concat(rest);
+  }
+  function reloadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.version === 1 && Array.isArray(parsed.tenants) && parsed.tenants.length) {
+        state = parsed;
+        ensureStoneTenants();
+        ensureDemoUsers();
+        ensureScanFeatures();
+        ensureExtraTenant();
+        ensureInnovativeFlags();
+      }
+    } catch (e) {
+      console.warn("Could not reload state", e);
+    }
+  }
   function ensureExtraTenant() {
     if (state.tenants.some((t2) => t2.id === "kasi")) return;
     const t = {
@@ -1009,6 +1184,7 @@
     impersonating: null
     // { tenantId, userName, reason }
   };
+  var ext = { preview: null, act: null, submit: null, afterReset: null };
   function toast(msg, kind = "") {
     const root = document.getElementById("toast-root");
     if (!root) return;
@@ -1080,17 +1256,17 @@
         <img class="login-logo" src="assets/logo.png" alt="Omnivate Solutions" />
         <div class="login-kicker">Owner control panel</div>
         <div class="login-title">Sign in</div>
-        <div class="login-sub">One console for every ERP you roll out to South African SMEs.</div>
+        <div class="login-sub">Sign in with your company account. Omnivate staff open the Control Centre; a tenant user opens only that company.</div>
         <div class="field">
           <label for="login-email">Email</label>
           <input class="input" id="login-email" type="email" autocomplete="username" value="${esc(ui.pendingEmail)}" placeholder="you@omnivate.co.za" required />
         </div>
         <div class="field">
           <label for="login-pass">Password</label>
-          <input class="input" id="login-pass" type="password" autocomplete="current-password" value="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" required />
+          <input class="input" id="login-pass" type="password" autocomplete="current-password" placeholder="Demo@123" required />
         </div>
         <button class="btn btn-primary btn-lg" type="submit">${icon("lock", 16)} Continue</button>
-        <div class="login-hint">Prototype \u2014 any credentials will sign you in. Next step is a mock MFA code.</div>
+        <div class="login-hint">Password <strong>Demo@123</strong> · MFA <strong>123456</strong><br>liam@omnivate.co.za · admin@topquartz.demo · admin@granitewarehouse.demo</div>
       </form>
     </div>`;
   }
@@ -1106,7 +1282,7 @@
           ${[0, 1, 2, 3, 4, 5].map((i) => `<input inputmode="numeric" maxlength="1" pattern="[0-9]" data-otp="${i}" aria-label="Digit ${i + 1}" />`).join("")}
         </div>
         <button class="btn btn-primary btn-lg" type="submit">Verify and continue</button>
-        <div class="login-hint">Demo code <strong>123456</strong> works, or type any 6 digits.</div>
+        <div class="login-hint">Demo code <strong>123456</strong></div>
       </form>
     </div>`;
     const inputs = [...document.querySelectorAll("#otp-row input")];
@@ -1130,10 +1306,48 @@
       });
     });
   }
+  function matchAccount(email, password) {
+    const em = String(email || "").trim().toLowerCase();
+    if (!em) return { error: "Enter the email address" };
+    for (const t of state.tenants) {
+      const u = (t.users || []).find((x) => String(x.email || "").toLowerCase() === em);
+      if (!u) continue;
+      const pw = u.password || "Demo@123";
+      if (password !== pw) return { error: "Incorrect password" };
+      return { kind: "tenant", tenantId: t.id, id: u.id, name: u.name, email: u.email, role: u.role };
+    }
+    const staff = (state.staff || []).find((s) => String(s.email || "").toLowerCase() === em);
+    const ownerish = !!staff || em === "liam@omnivate" || em.endsWith("@omnivate.co.za");
+    if (ownerish) {
+      if (!password) return { error: "Enter the password" };
+      const person = staff || { id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner" };
+      return { kind: "owner", id: person.id, name: person.name, email: person.email || em, role: person.role || "Owner" };
+    }
+    return { error: "Unknown account. Use one of the demo logins on this screen." };
+  }
+  function homeFor(session) {
+    if (session && session.kind === "tenant" && session.tenantId) return "#/preview/" + session.tenantId + "/work/home";
+    return "#/fleet";
+  }
   function completeLogin() {
-    setSession({ id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner" });
+    const auth = ui.pendingAuth;
+    if (!auth) {
+      navigate("#/login");
+      return;
+    }
+    setSession(auth);
+    if (auth.kind === "tenant") {
+      patchTenant(auth.tenantId, (x) => {
+        const u = (x.users || []).find((uu) => uu.id === auth.id);
+        if (u) u.lastLogin = (/* @__PURE__ */ new Date()).toISOString();
+      });
+      const t = getTenant(auth.tenantId);
+      navigate("#/preview/" + auth.tenantId + "/work/home");
+      toast("Signed in to " + ((t && (t.tradingAs || t.name)) || "workspace"), "ok");
+      return;
+    }
     navigate("#/fleet");
-    toast("Welcome back, Liam", "ok");
+    toast("Welcome back, " + (auth.name || "Liam"), "ok");
   }
   function allAlerts() {
     const items = [];
@@ -1175,6 +1389,7 @@
         <div class="sidebar-user">
           <div class="avatar">${esc(initials(session && session.name))}</div>
           <div class="meta"><strong>${esc(session && session.name)}</strong><span>${esc(session && session.role)} \xB7 Omnivate</span></div>
+          <button class="icon-btn" title="Reset demo data" data-act="reset-demo">${icon("rollback", 16)}</button>
           <button class="icon-btn" title="Sign out" data-act="logout">${icon("logout", 16)}</button>
         </div>
       </aside>
@@ -1242,6 +1457,7 @@
         <p>Every ERP instance in one place \u2014 shared clusters and dedicated boxes, Johannesburg and Cape Town.</p>
       </div>
       <div class="actions">
+        <button class="btn btn-secondary" data-act="reset-demo">${icon("rollback", 16)} Reset demo data</button>
         <button class="btn btn-secondary" data-act="open-migrate">${icon("upload", 16)} Migrate from Pastel / Sage / Xero</button>
         <button class="btn btn-primary" data-act="open-new-tenant">${icon("plus", 16)} New instance</button>
       </div>
@@ -1497,6 +1713,24 @@
         <button class="btn btn-sm btn-secondary" data-act="modules-all" data-id="${t.id}">Enable all</button>
       </div>
     </div>
+    <div class="card" style="margin-bottom:14px;box-shadow:none">
+      <div class="card-b">
+        <h2 style="font-size:15px;margin-bottom:8px">Shop-floor scanning</h2>
+        <label class="field-row" style="border:0;padding:6px 0">
+          <label class="switch"><input type="checkbox" data-act="toggle-camera-scan" data-id="${t.id}" ${t.features && t.features.cameraScan ? "checked" : ""} /><span></span></label>
+          <span><strong>Scan by camera</strong><div class="tiny">Phone camera buttons in this company's workspace. Off hides them. Handheld USB and Bluetooth scanners are not affected.</div></span>
+        </label>
+        <div style="margin-top:6px"><span class="badge badge-teal">Handheld scanner on</span> <span class="tiny">Keyboard wedge — types the code and presses Enter. Always available on stock, quotes, invoices and sales orders.</span></div>
+        <label class="field-row" style="border:0;padding:8px 0 0">
+          <label class="switch"><input type="checkbox" data-act="toggle-feature" data-id="${t.id}" data-key="production" data-label="Production" ${t.features && t.features.production ? "checked" : ""} /><span></span></label>
+          <span><strong>Production</strong><div class="tiny">Blocks from quarry to slab: receiving, cutting, polishing, job cards and recovery. On for The Granite Warehouse in the demo.</div></span>
+        </label>
+        <label class="field-row" style="border:0;padding:6px 0">
+          <label class="switch"><input type="checkbox" data-act="toggle-feature" data-id="${t.id}" data-key="timesheets" data-label="Timesheets" ${t.features && t.features.timesheets ? "checked" : ""} /><span></span></label>
+          <span><strong>Timesheets</strong><div class="tiny">Shifts, roster, clock in/out, BCEA overtime, night allowance and leave.</div></span>
+        </label>
+      </div>
+    </div>
     ${AREAS.map((area) => {
       const mods = MODULES.filter((m) => m.area === area);
       const on = mods.filter((m) => t.modules[m.code]).length;
@@ -1519,8 +1753,12 @@
   }
   function renderColumnsTab(t) {
     const enabled = enabledModules(t);
-    const mid = ui.colModule[t.id] || enabled[0] && enabled[0].code || "M22";
-    const screens = screensFor(mid);
+    const mid = ui.colModule[t.id] || (t.id === "granite-warehouse" ? "M22" : enabled[0] && enabled[0].code) || "M22";
+    let screens = screensFor(mid);
+    if (t.id === "granite-warehouse" && mid === "M22" && !screens.some((s) => s.name === "Slab orders")) {
+      screens = screens.concat([{ name: "Slab orders", type: "List grid", columnCount: SLAB_ORDER_COLS.length, purpose: "Sample yard orders for slabs, headstones and cut stone. Hiding a column here removes it from the client grid." }]);
+    }
+    if (!ui.colScreen[t.id] && t.id === "granite-warehouse" && mid === "M22") ui.colScreen[t.id] = "Slab orders";
     const sid = ui.colScreen[t.id] || screens[0] && screens[0].name || "";
     const q = (ui.colSearch[t.id] || "").toLowerCase();
     const mode = ui.colMode[t.id] || "grid";
@@ -1618,7 +1856,7 @@
     const crud = ["C", "R", "U", "D", "A"];
     return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div><strong>${(t.users || []).length} users</strong><div class="tiny">Invites are mocked \u2014 they are stored in this browser only.</div></div>
+      <div><strong>${(t.users || []).length} users</strong><div class="tiny">These accounts sign in to this company only. New users start with password Demo@123.</div></div>
       <button class="btn btn-sm btn-primary" data-act="invite-user" data-id="${t.id}">${icon("userPlus", 14)} Invite user</button>
     </div>
     <div class="table-wrap" style="margin-bottom:22px">
@@ -1641,7 +1879,10 @@
               <td>${u.mfa ? '<span class="badge badge-success">On</span>' : '<span class="badge badge-warning">Off</span>'}</td>
               <td><span class="badge ${u.status === "Active" ? "badge-success" : "badge-neutral"}">${esc(u.status)}</span></td>
               <td class="tiny">${u.lastLogin ? fmtDate(u.lastLogin) : "\u2014"}</td>
-              <td><button class="btn btn-sm btn-secondary" data-act="impersonate" data-id="${t.id}" data-user="${u.id}">Impersonate</button></td>
+              <td>
+                <button class="btn btn-sm btn-secondary" data-act="impersonate" data-id="${t.id}" data-user="${u.id}">Impersonate</button>
+                <button class="btn btn-sm btn-secondary" data-act="reset-user-password" data-id="${t.id}" data-user="${u.id}">Reset password</button>
+              </td>
             </tr>`).join("")}
         </tbody>
       </table>
@@ -1951,6 +2192,7 @@
           </div>
         </div>
         <nav class="preview-nav">
+          <a href="#/preview/${t.id}/work/home">${icon("activity", 15)} Workspace</a>
           ${byArea.map((g) => `
             <div class="area">${esc(g.area)}</div>
             ${g.modules.map((m) => `
@@ -2306,7 +2548,7 @@
         reply = "Opening the client preview for " + ten.name + ".";
         ui.askMessages.push({ role: "assistant", text: reply });
         persistAsk();
-        navigate("#/preview/" + ten.id);
+        navigate("#/preview/" + ten.id + "/work/home");
         return;
       }
       reply = "Which tenant should I preview?";
@@ -2537,6 +2779,8 @@
       <div class="field"><label>Role</label>
         <select class="select" id="iu-role">${DEFAULT_ROLES.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}</select>
       </div>
+      <div class="field"><label>Password</label><input class="input" id="iu-pass" value="Demo@123" autocomplete="off" /></div>
+      <p class="tiny">They sign in with this email and password, then MFA 123456, and see only ${esc(t.tradingAs || t.name)}.</p>
     </div>
     <div class="modal-f">
       <button class="btn btn-secondary" data-act="close-modal">Cancel</button>
@@ -2544,15 +2788,25 @@
     </div>`);
     document.getElementById("iu-go").onclick = () => {
       const name = document.getElementById("iu-name").value.trim() || "New user";
-      const email = document.getElementById("iu-email").value.trim() || name.toLowerCase().replace(/\s+/g, ".") + "@example.co.za";
+      const email = document.getElementById("iu-email").value.trim().toLowerCase();
       const role = document.getElementById("iu-role").value;
+      const password = document.getElementById("iu-pass").value || "Demo@123";
+      if (!email.includes("@")) {
+        toast("Enter an email address", "warn");
+        return;
+      }
+      const taken = state.tenants.some((tt) => (tt.users || []).some((u) => String(u.email || "").toLowerCase() === email));
+      if (taken) {
+        toast("That email is already a user", "warn");
+        return;
+      }
       patchTenant(tenantId, (x) => {
         x.users = x.users || [];
-        x.users.push({ id: uid("u"), name, email, role, status: "Invited", lastLogin: null, mfa: false });
+        x.users.push({ id: uid("u"), name, email, role, status: "Active", lastLogin: null, mfa: true, password });
         x.usersCount = x.users.length;
-      }, { tenantId, action: "User invited", target: name, before: "\u2014", after: "Role: " + (DEFAULT_ROLES.find((r) => r.id === role) || {}).name });
+      }, { tenantId, action: "User added", target: email, before: "\u2014", after: "Role: " + ((DEFAULT_ROLES.find((r) => r.id === role) || {}).name || role) });
       closeModal();
-      toast("Invite sent to " + email + " (mock)", "ok");
+      toast(name + " can sign in as " + email, "ok");
       render();
     };
   }
@@ -2622,7 +2876,7 @@
       ui.impersonating = { tenantId: tid, userId: uid_, userName: user ? user.name : "User", reason };
       pushAudit({ tenantId: tid, action: "Impersonation started", target: user ? user.name : uid_, before: "\u2014", after: "Reason: " + reason });
       closeModal();
-      navigate("#/preview/" + tid);
+      navigate("#/preview/" + tid + "/work/home");
       toast("Now impersonating " + (user ? user.name : "user") + " at " + ten.tradingAs, "ok");
     };
   }
@@ -2778,12 +3032,20 @@
       else renderLogin();
       return;
     }
-    if (route.view === "login" || route.view === "mfa") {
+    if (session.kind === "tenant") {
+      const ok = route.view === "preview" && route.parts[1] === session.tenantId;
+      if (!ok) {
+        navigate(homeFor(session));
+        return;
+      }
+    } else if (route.view === "login" || route.view === "mfa") {
       navigate("#/fleet");
       return;
     }
     const y = opts.keepScroll ? (document.querySelector(".content") || {}).scrollTop || 0 : 0;
-    if (route.view === "preview") renderPreview();
+    if (route.view === "preview") {
+      if (!(ext.preview && ext.preview())) renderPreview();
+    }
     else if (route.view === "tenants") renderTenant();
     else if (route.view === "users") renderUsers();
     else if (route.view === "releases") renderReleases();
@@ -2872,6 +3134,29 @@
     }
     const act = el.getAttribute("data-act");
     const id = el.getAttribute("data-id");
+    if (ext.act && ext.act(act, el, e)) return;
+    if (act === "reset-demo") {
+      e.preventDefault();
+      confirmModal({
+        title: "Reset demo data",
+        body: "This clears changes stored in this browser and restores the seeded companies, including Top Quartz and The Granite Warehouse.",
+        confirm: "Reset demo data",
+        danger: true,
+        onConfirm: () => {
+          resetDemo();
+          ensureStoneTenants();
+          ensureDemoUsers();
+          ensureScanFeatures();
+          ensureExtraTenant();
+          ensureInnovativeFlags();
+          persist();
+          if (ext.afterReset) ext.afterReset();
+          toast("Demo data restored", "ok");
+          navigate("#/fleet");
+        }
+      });
+      return;
+    }
     if (act === "close-modal") {
       e.preventDefault();
       stopScanner();
@@ -2952,7 +3237,7 @@
     }
     if (act === "preview-tenant" || act === "switch-tenant") {
       e.preventDefault();
-      navigate("#/preview/" + id);
+      navigate("#/preview/" + id + "/work/home");
       return;
     }
     if (act === "exit-preview") {
@@ -3016,6 +3301,21 @@
         });
       }, { tenantId: id, action: "All modules enabled", target: "Module set", before: before + " on", after: "41 on" });
       toast("All 41 modules enabled", "ok");
+      render({ keepScroll: true });
+      return;
+    }
+    if (act === "reset-user-password") {
+      e.preventDefault();
+      const uid_ = el.getAttribute("data-user");
+      const t = getTenant(id);
+      const user = t && (t.users || []).find((u) => u.id === uid_);
+      if (!user) return;
+      const before = user.password ? "Set" : "Unset";
+      patchTenant(id, (x) => {
+        const u = (x.users || []).find((uu) => uu.id === uid_);
+        if (u) u.password = "Demo@123";
+      }, { tenantId: id, action: "Password reset", target: user.email || user.name, before, after: "Demo@123" });
+      toast("Password for " + (user.email || user.name) + " reset to Demo@123", "ok");
       render({ keepScroll: true });
       return;
     }
@@ -3233,6 +3533,31 @@
       render({ keepScroll: true });
       return;
     }
+    if (act === "toggle-feature") {
+      const key = el.getAttribute("data-key");
+      const label = el.getAttribute("data-label") || key;
+      const t = getTenant(id);
+      const prev = t.features && t.features[key] ? "On" : "Off";
+      patchTenant(id, (x) => {
+        x.features = x.features || {};
+        x.features[key] = el.checked;
+      }, { tenantId: id, action: el.checked ? label + " enabled" : label + " disabled", target: label, before: prev, after: el.checked ? "On" : "Off" });
+      toast(label + (el.checked ? " is on" : " is off") + " for " + (t.tradingAs || t.name), "ok");
+      render({ keepScroll: true });
+      return;
+    }
+    if (act === "toggle-camera-scan") {
+      const t = getTenant(id);
+      const prev = t.features && t.features.cameraScan ? "On" : "Off";
+      patchTenant(id, (x) => {
+        x.features = x.features || {};
+        x.features.cameraScan = el.checked;
+        x.features.handheldScan = true;
+      }, { tenantId: id, action: el.checked ? "Camera scan enabled" : "Camera scan disabled", target: "Scan by camera", before: prev, after: el.checked ? "On" : "Off" });
+      toast(el.checked ? "Camera scan is on for " + (t.tradingAs || t.name) : "Camera scan is off — handheld scanners still work", "ok");
+      render({ keepScroll: true });
+      return;
+    }
     if (act === "toggle-module") {
       const code = el.getAttribute("data-code");
       const mod = getModule(code);
@@ -3331,16 +3656,24 @@
     const act = form.getAttribute("data-act");
     if (!act) return;
     e.preventDefault();
+    if (ext.submit && ext.submit(act, form, e)) return;
     if (act === "login-submit") {
-      const email = document.getElementById("login-email");
-      ui.pendingEmail = email && email.value || "liam@omnivate.co.za";
+      const emailEl = document.getElementById("login-email");
+      const passEl = document.getElementById("login-pass");
+      const found = matchAccount(emailEl && emailEl.value, passEl && passEl.value);
+      if (found.error) {
+        toast(found.error, "err");
+        return;
+      }
+      ui.pendingEmail = found.email;
+      ui.pendingAuth = found;
       navigate("#/mfa");
       return;
     }
     if (act === "mfa-submit") {
       const digits = [...document.querySelectorAll("#otp-row input")].map((i) => i.value).join("");
-      if (digits.length < 6) {
-        toast("Enter all 6 digits", "warn");
+      if (digits !== "123456") {
+        toast("Demo code is 123456", "warn");
         return;
       }
       completeLogin();
@@ -3395,7 +3728,7 @@
         ["invoices", "payments", "approvals", "backups", "marketing"].forEach((k) => {
           x.whatsapp[k] = chk("wa_" + k);
         });
-      }, { tenantId: id, action: "Company profile saved", target: "Company & branding", before: "\u2014", after: "Updated" });
+      }, { tenantId: id, action: "Branding updated", target: "Trading name", before: (getTenant(id) && getTenant(id).tradingAs) || "\u2014", after: val("tradingAs") || "\u2014" });
       toast("Company settings saved", "ok");
       render({ keepScroll: true });
     }
@@ -3424,11 +3757,27 @@
       }
     }
   }
+  window.Omnivate = {
+    ext, getTenant, getState, patchTenant, pushAudit, persist, render, navigate, toast,
+    openModal, closeModal, confirmModal, esc, zar, icon, uid, getSession, resolvedColumns,
+    applyTerm, enabledModules, getModule, screensFor, parseHash, resetDemo, reloadFromStorage,
+    ui, AREAS, AREA_ICON, MODULES, PLANS, stopScanner, fmtDate
+  };
   function boot() {
     loadState();
+    ensureStoneTenants();
+    ensureDemoUsers();
+    ensureScanFeatures();
     ensureExtraTenant();
     ensureInnovativeFlags();
     persist();
+    window.addEventListener("storage", (ev) => {
+      if (ev.key === STORE_KEY) {
+        reloadFromStorage();
+        if (ext.afterReset) ext.afterReset();
+        render();
+      }
+    });
     window.addEventListener("hashchange", () => {
       ui.sidebarOpen = false;
       ui.notifOpen = false;
