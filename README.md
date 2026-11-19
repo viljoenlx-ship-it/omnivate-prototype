@@ -19,5 +19,3 @@ NIIMBOT M2-H labels default to **50 × 15 mm**, **591 × 177 px** at 300 dpi. Wi
 Goods received (GRV) is under Stock. **Print all labels** asks you to confirm the quantity per line, then prints that many labels with a progress bar, pause, and retry. The same queue is on multi-selected stock rows and on **Print all slab labels** for a production block.
 
 Reset demo data on the Fleet page restores this seed.
-
-**Omnivate Production** is a separate Top Quartz shop-floor app at [production/](production/) (live: https://viljoenlx-ship-it.github.io/omnivate-prototype/production/). It has its own data (`omnivate.production.*`) and can be installed on Android. Logins: `admin@topquartz.demo` (full) and `operator@topquartz.demo` (scan, advance and print). Same password and MFA as above. The Control Centre links to it under Standalone apps.

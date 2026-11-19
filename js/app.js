@@ -1470,13 +1470,6 @@
         <button class="btn btn-primary" data-act="open-new-tenant">${icon("plus", 16)} New instance</button>
       </div>
     </div>
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-b">
-        <h2 style="font-size:15px;margin-bottom:6px">Standalone apps</h2>
-        <p class="tiny" style="margin-bottom:10px">Omnivate Production is a separate Top Quartz floor app for blocks, cutting and labels. It keeps its own browser data and does not use this Control Centre.</p>
-        <a class="btn btn-primary" href="production/">Open Omnivate Production</a>
-      </div>
-    </div>
     <div class="kpi-grid">
       <div class="kpi"><div class="label">Monthly recurring revenue</div><div class="value">${zar(mrr)}</div><div class="sub"><span class="delta up">ZAR \xB7 ${state.tenants.length} subscriptions</span></div></div>
       <div class="kpi"><div class="label">Instances</div><div class="value">${state.tenants.length}</div><div class="sub">${healthy} healthy \xB7 ${state.tenants.filter((t) => t.hosting === "Dedicated").length} dedicated</div></div>
