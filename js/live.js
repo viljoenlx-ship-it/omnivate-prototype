@@ -552,16 +552,38 @@
       { id: prefix + "-grv3", number: prefix + "-GRV-106", supplier: "Sample: Pietersburg Grey Quarry", date: "2026-11-15", posted: true, lines: [line(3, 3), line(4, 1)] }
     ];
   }
+  function bumpDocSequences(t) {
+    if (!t || !t.profile || !t.books) return false;
+    var changed = false;
+    (t.profile.sequences || []).forEach(function (seq) {
+      var list = /quot/i.test(seq.doc) ? t.books.quotes : /inv/i.test(seq.doc) ? t.books.invoices : null;
+      if (!list || !seq.prefix) return;
+      var re = new RegExp("^" + String(seq.prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(\\d+)$");
+      var max = 0;
+      list.forEach(function (d) {
+        var m = String(d.number || "").match(re);
+        if (m) max = Math.max(max, Number(m[1]));
+      });
+      if ((Number(seq.next) || 0) <= max) {
+        seq.next = max + 1;
+        changed = true;
+      }
+    });
+    return changed;
+  }
   function ensureBooks(t) {
     if (!t) return null;
+    var changed = false;
     if (!t.books || t.books.seed !== SEED) {
       t.books = seedBooks(t);
-      O.persist();
+      changed = true;
     }
     if (!t.books.grvs) {
-      t.books.grvs = makeGrvs(t.books.products || [], t.id === "granite-warehouse" ? "GW" : "TQ");
-      O.persist();
+      t.books.grvs = makeGrvs(t.books.products || [], labelPrefix(t));
+      changed = true;
     }
+    if (bumpDocSequences(t)) changed = true;
+    if (changed) O.persist();
     return t.books;
   }
 
@@ -1276,9 +1298,17 @@
   function nextNo(t, kind) {
     var seq = (t.profile.sequences || []).find(function (s) { return /quot/i.test(s.doc) && kind === "quote" || /inv/i.test(s.doc) && kind === "invoice"; });
     if (!seq) return (kind === "quote" ? "QT-" : "INV-") + Date.now().toString().slice(-4);
-    var n = String(seq.next).padStart(seq.pad || 4, "0");
-    seq.next += 1;
-    return seq.prefix + n;
+    var list = kind === "invoice" ? t.books.invoices : t.books.quotes;
+    var used = {};
+    (list || []).forEach(function (d) { if (d && d.number) used[d.number] = true; });
+    var code = "";
+    var guard = 0;
+    do {
+      code = seq.prefix + String(seq.next).padStart(seq.pad || 4, "0");
+      seq.next += 1;
+      guard += 1;
+    } while (used[code] && guard < 10000);
+    return code;
   }
   function saveDoc(t, kind) {
     captureDraft();
@@ -1448,7 +1478,10 @@
     var state = O.getState();
     if (!state || !state.tenants) return;
     var changed = false;
-    state.tenants.forEach(function (t) { if (ensureBusiness(t)) changed = true; });
+    state.tenants.forEach(function (t) {
+      if (ensureBusiness(t)) changed = true;
+      if (t.books && bumpDocSequences(t)) changed = true;
+    });
     if (changed) O.persist();
   }
   function plusDays(iso, n) {
@@ -1611,33 +1644,56 @@
     openPrint(renderBizDoc(t, salesDocSpec(t, doc, kind || (String(doc.number || "").indexOf("INV") >= 0 ? "invoice" : "quote"))));
   }
 
+  var camTimer = null;
+  var camStream = null;
+  var camGen = 0;
+  function stopWorkspaceCamera() {
+    camGen += 1;
+    if (camTimer) { clearInterval(camTimer); camTimer = null; }
+    if (camStream) {
+      camStream.getTracks().forEach(function (tr) { try { tr.stop(); } catch (e) { /* already stopped */ } });
+      camStream = null;
+    }
+  }
   function openCamera(t) {
     if (!cameraOn(t)) return;
+    stopWorkspaceCamera();
+    var gen = camGen;
     O.openModal('<div class="modal-h"><h3>Scan by camera</h3><button class="icon-btn light" data-act="close-modal">' + O.icon("x", 16) + '</button></div><div class="modal-b"><video id="cam-video" autoplay playsinline muted style="width:100%;background:#0f172a;border-radius:8px"></video><p class="tiny" id="cam-status">Starting camera\u2026</p><div class="scan-row"><input class="input" id="cam-manual" data-scan-field inputmode="none" autocomplete="off" placeholder="SKU or slab #"><button type="button" class="btn btn-secondary scan-kbd" data-act="scan-keyboard">Keyboard</button></div></div><div class="modal-f"><button class="btn btn-secondary" data-act="close-modal">Close</button></div>');
     var video = document.getElementById("cam-video");
     var status = document.getElementById("cam-status");
     if (!navigator.mediaDevices || !window.BarcodeDetector) {
-      status.textContent = "This browser has no Barcode Detector. Use the handheld scanner or type the code.";
+      if (status) status.textContent = "This browser has no Barcode Detector. Use the handheld scanner or type the code.";
       return;
     }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function (stream) {
+      if (gen !== camGen || !video || !document.body.contains(video)) {
+        stream.getTracks().forEach(function (tr) { tr.stop(); });
+        return;
+      }
+      camStream = stream;
       video.srcObject = stream;
       var det = new window.BarcodeDetector({ formats: ["code_128", "ean_13", "ean_8", "qr_code", "code_39"] });
-      var timer = setInterval(function () {
+      camTimer = setInterval(function () {
+        if (gen !== camGen) return;
         det.detect(video).then(function (codes) {
+          if (gen !== camGen) return;
           if (codes && codes[0]) {
-            clearInterval(timer);
-            stream.getTracks().forEach(function (tr) { tr.stop(); });
+            stopWorkspaceCamera();
             O.closeModal();
             onScan(codes[0].rawValue, "camera");
           }
         }).catch(function () {});
       }, 400);
-      video.dataset.timer = String(timer);
     }).catch(function () {
-      status.textContent = "Camera permission was blocked. Use the handheld scanner.";
+      if (status && document.body.contains(status)) status.textContent = "Camera permission was blocked. Use the handheld scanner.";
     });
   }
+  var prevCloseModal = O.closeModal;
+  O.closeModal = function () {
+    stopWorkspaceCamera();
+    return prevCloseModal.apply(this, arguments);
+  };
 
   document.addEventListener("input", function (e) {
     var form = e.target.closest && e.target.closest("#doc-form");
