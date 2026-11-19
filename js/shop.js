@@ -765,8 +765,12 @@
     var root = document.getElementById("doc-print-root");
     root.innerHTML = '<article class="paper"><h1>Timesheet</h1><p>' + esc(t.tradingAs || t.name) + " · week of " + esc(week) + "</p>" + html + "</article>";
     document.body.classList.add("printing-doc");
-    window.print();
-    document.body.classList.remove("printing-doc");
+    var cleanup = function () {
+      document.body.classList.remove("printing-doc");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    setTimeout(function () { window.print(); }, 40);
   }
   function csvEscape(s) { return '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"'; }
   function download(name, text) {
