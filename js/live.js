@@ -5,7 +5,8 @@
   if (!O) return;
 
   var SEED = "demo-2026-11-17-wholesale";
-  var LABEL_KEY = "omnivate.m2hLabel.v2";
+  var LABEL_GEOM_KEY = "omnivate.m2hLabel.v2";
+  var LABEL_SERIAL_KEY = "omnivate.labels.v1";
   var M2H = {
     label: "Niimbot M2-H",
     id: 4608,
@@ -37,11 +38,56 @@
     return id ? O.getTenant(id) : null;
   }
   function screenName() { return routeParts()[3] || "home"; }
+  function actorRole(t) {
+    var imp = O.ui && O.ui.impersonating;
+    if (imp && t && imp.tenantId === t.id && imp.userId) {
+      var user = (t.users || []).find(function (x) { return x.id === imp.userId; });
+      if (user && user.role) return user.role;
+    }
+    var session = O.getSession();
+    if (session && session.kind === "tenant" && t && session.tenantId === t.id && session.role) return session.role;
+    return "administrator";
+  }
+  function can(t, code, flag) {
+    if (!t) return false;
+    if (actorRole(t) === "administrator") return true;
+    var bucket = t.permissions && t.permissions[actorRole(t)] && t.permissions[actorRole(t)][code];
+    return !!(bucket && bucket[flag]);
+  }
+  function allow(t, code, flag) {
+    if (can(t, code, flag)) return true;
+    var word = { C: "create", R: "view", U: "change", D: "delete", A: "approve" }[flag] || "change";
+    O.toast("Your role cannot " + word + " that", "warn");
+    return false;
+  }
 
+  function splitLegacyLabelStore() {
+    var raw;
+    try { raw = JSON.parse(localStorage.getItem(LABEL_SERIAL_KEY) || "null"); } catch (e) { return; }
+    if (!raw || typeof raw !== "object" || !(Number(raw.wMm) > 0)) return;
+    if (!localStorage.getItem(LABEL_GEOM_KEY)) {
+      localStorage.setItem(LABEL_GEOM_KEY, JSON.stringify({
+        wMm: Number(raw.wMm) || 50,
+        hMm: Number(raw.hMm) || 15,
+        offsetX: raw.offsetX | 0,
+        offsetY: raw.offsetY | 0,
+        showPrice: raw.showPrice !== false,
+        copies: raw.copies > 0 ? raw.copies | 0 : 1
+      }));
+    }
+    delete raw.wMm;
+    delete raw.hMm;
+    delete raw.offsetX;
+    delete raw.offsetY;
+    delete raw.showPrice;
+    delete raw.copies;
+    localStorage.setItem(LABEL_SERIAL_KEY, JSON.stringify(raw));
+  }
   function loadLabel() {
+    splitLegacyLabelStore();
     var d = { wMm: 50, hMm: 15, offsetX: 0, offsetY: 0, showPrice: true, copies: 1 };
     try {
-      var raw = JSON.parse(localStorage.getItem(LABEL_KEY) || "null");
+      var raw = JSON.parse(localStorage.getItem(LABEL_GEOM_KEY) || "null");
       if (raw && typeof raw === "object") {
         if (raw.wMm > 0) d.wMm = Number(raw.wMm);
         if (raw.hMm > 0) d.hMm = Number(raw.hMm);
@@ -56,7 +102,7 @@
   function saveLabel(p) {
     var cur = loadLabel();
     Object.keys(p).forEach(function (k) { cur[k] = p[k]; });
-    localStorage.setItem(LABEL_KEY, JSON.stringify(cur));
+    localStorage.setItem(LABEL_GEOM_KEY, JSON.stringify(cur));
     return cur;
   }
   function geom() {
@@ -125,14 +171,14 @@
       ctx.textAlign = "left";
     });
   }
-  var LABEL_KEY = "omnivate.labels.v1";
   function labelPrefix(t) {
     if (t.id === "granite-warehouse") return "GW";
     if (t.id === "top-quartz") return "TQ";
     return String(t.id || "LB").replace(/[^a-z0-9]/gi, "").slice(0, 3).toUpperCase() || "LB";
   }
   function readLabelStore() {
-    try { return JSON.parse(localStorage.getItem(LABEL_KEY) || "{}") || {}; } catch (e) { return {}; }
+    splitLegacyLabelStore();
+    try { return JSON.parse(localStorage.getItem(LABEL_SERIAL_KEY) || "{}") || {}; } catch (e) { return {}; }
   }
   function assignCodes(t, specs) {
     var all = readLabelStore();
@@ -151,7 +197,7 @@
       out.push(code);
     });
     all[t.id] = book;
-    localStorage.setItem(LABEL_KEY, JSON.stringify(all));
+    localStorage.setItem(LABEL_SERIAL_KEY, JSON.stringify(all));
     t.labelSerial = { next: book.next, pieces: book.pieces };
     if (window.Omnivate) window.Omnivate.persist();
     return out.slice();
@@ -283,8 +329,12 @@
     style.textContent = "@page { size: " + size.wMm + "mm " + size.hMm + "mm; margin: 0; } @media print { html, body { margin: 0 !important; padding: 0 !important; } body.printing-labels > *:not(#label-print-root) { display: none !important; } body.printing-labels #label-print-root { display: block !important; } }";
     document.head.appendChild(style);
     document.body.classList.add("printing-labels");
-    window.print();
-    document.body.classList.remove("printing-labels");
+    var cleanup = function () {
+      document.body.classList.remove("printing-labels");
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
+    setTimeout(function () { window.print(); }, 40);
   }
 
   function P(sku, name, sell, cost, onHand, reorder, uom) {
@@ -536,11 +586,12 @@
       if (inv.status !== "Paid") debtors += tot;
     });
     if (!(b.invoices || []).length) {
+      var ym = todayKey();
       (b.orders || []).forEach(function (o) {
         if (String(o.date).slice(0, 7) === ym) sales += (o.total || 0) + (o.transport || 0);
       });
     }
-    var openQ = (b.quotes || []).filter(function (q) { return q.status === "Draft" || q.status === "Sent"; }).length;
+    var openQ = (b.quotes || []).filter(function (q) { return quoteHoldsStock(q.status); }).length;
     var openO = (b.orders || []).filter(function (o) { return !o.complete; }).length;
     var stock = 0, lows = 0;
     (b.products || []).forEach(function (p) {
@@ -691,14 +742,21 @@
   function cols(t, mod, screen, map) {
     var resolved = O.resolvedColumns(t, mod, screen);
     var byId = {};
-    resolved.forEach(function (c) { byId[c.id] = c; });
-    return map.filter(function (col) {
-      var r = byId[col.id];
-      return !r || r.visible;
-    }).map(function (col) {
-      var r = byId[col.id];
-      return { id: col.id, key: col.key, label: r ? r.displayName : col.label, align: col.align || "" };
+    map.forEach(function (col) { byId[col.id] = col; });
+    var seen = {};
+    var out = [];
+    resolved.forEach(function (r) {
+      var col = byId[r.id];
+      if (!col || r.visible === false) return;
+      seen[col.id] = true;
+      out.push({ id: col.id, key: col.key, label: r.displayName || col.label, align: col.align || "" });
     });
+    map.forEach(function (col) {
+      if (seen[col.id]) return;
+      if (resolved.some(function (r) { return r.id === col.id; })) return;
+      out.push({ id: col.id, key: col.key, label: col.label, align: col.align || "" });
+    });
+    return out;
   }
   var PRODUCT_MAP = [
     { id: "M29::Item master::1", key: "sku", label: "Item code" },
@@ -756,12 +814,22 @@
       "</tbody></table></div>";
   }
 
+  function quoteHoldsStock(status) {
+    return status === "Draft" || status === "Sent" || status === "Accepted";
+  }
+  function openQuotedQty(t, productId, exceptQuoteId) {
+    return (t.books.quotes || []).reduce(function (sum, q) {
+      if (!quoteHoldsStock(q.status) || q.id === exceptQuoteId) return sum;
+      return sum + (q.lines || []).reduce(function (n, l) {
+        return l.productId === productId ? n + (Number(l.qty) || 0) : n;
+      }, 0);
+    }, 0);
+  }
   function slabHold(t, p) {
-    if ((Number(p.onHand) || 0) <= 0) return "sold";
-    var held = (t.books.quotes || []).some(function (q) {
-      return (q.status === "Draft" || q.status === "Sent") && (q.lines || []).some(function (l) { return l.productId === p.id; });
-    });
-    return held ? "reserved" : "free";
+    var onHand = Number(p.onHand) || 0;
+    if (onHand <= 0) return "sold";
+    if (openQuotedQty(t, p.id) >= onHand) return "reserved";
+    return "free";
   }
   function quoteBadge(t) {
     var q = (t.books.quotes || []).find(function (d) { return d.id === t.books.quoteFocus; });
@@ -770,7 +838,7 @@
   }
   function productRow(t, columns, p) {
     var hold = slabHold(t, p);
-    var quoteBtn = hold === "free"
+    var quoteBtn = !can(t, "M22", "C") ? "" : hold === "free"
       ? '<button class="btn btn-sm btn-primary" data-act="add-quote" data-id="' + t.id + '" data-sku="' + O.esc(p.id) + '">Add to quote</button>'
       : '<button class="btn btn-sm btn-secondary" type="button" disabled>' + (hold === "sold" ? "Sold" : "Reserved") + "</button>";
     return '<tr class="' + (hit.kind === "product" && hit.id === p.id ? "scan-hit" : "") + '" data-product="' + O.esc(p.id) + '">' +
@@ -858,7 +926,8 @@
             if (c.key === "prod" || c.key === "done") {
               var flag = c.key === "prod" ? "production" : "complete";
               var on = c.key === "prod" ? o.production : o.complete;
-              return '<td><input type="checkbox" data-act="order-flag" data-id="' + t.id + '" data-order="' + o.id + '" data-flag="' + flag + '" ' + (on ? "checked" : "") + "></td>";
+              var lock = can(t, "M22", "U") ? "" : " disabled";
+              return '<td><input type="checkbox" data-act="order-flag" data-id="' + t.id + '" data-order="' + o.id + '" data-flag="' + flag + '" ' + (on ? "checked" : "") + lock + "></td>";
             }
             return "<td>" + O.esc(v[c.key] == null ? "" : v[c.key]) + "</td>";
           }).join("") +
@@ -871,12 +940,12 @@
 
   function nav(t) {
     var items = [{ id: "home", label: "Home", on: true }];
-    if (t.modules.M29) items.push({ id: "products", label: "Stock", on: true });
-    if (t.modules.M29) items.push({ id: "grv", label: "GRV", on: true });
-    if (t.modules.M22 || t.modules.M23) items.push({ id: "customers", label: "Customers", on: true });
-    if (t.modules.M22) items.push({ id: "quotes", label: "Quotes", on: true });
-    if (t.modules.M22 || t.modules.M17) items.push({ id: "invoices", label: "Invoices", on: true });
-    if (t.modules.M22 && (t.id === "granite-warehouse" || t.id === "top-quartz")) items.push({ id: "orders", label: "Sales orders", on: true });
+    if (t.modules.M29 && can(t, "M29", "R")) items.push({ id: "products", label: "Stock", on: true });
+    if (t.modules.M29 && can(t, "M29", "R")) items.push({ id: "grv", label: "GRV", on: true });
+    if ((t.modules.M22 || t.modules.M23) && (can(t, "M22", "R") || can(t, "M23", "R"))) items.push({ id: "customers", label: "Customers", on: true });
+    if (t.modules.M22 && can(t, "M22", "R")) items.push({ id: "quotes", label: "Quotes", on: true });
+    if ((t.modules.M22 || t.modules.M17) && (can(t, "M22", "R") || can(t, "M17", "R"))) items.push({ id: "invoices", label: "Invoices", on: true });
+    if (t.modules.M22 && can(t, "M22", "R") && (t.id === "granite-warehouse" || t.id === "top-quartz")) items.push({ id: "orders", label: "Sales orders", on: true });
     items.push({ id: "labels", label: "Labels", on: true });
     if (window.OmnivateShop) items = items.concat(window.OmnivateShop.nav(t));
     var cur = screenName();
@@ -898,8 +967,8 @@
   }
   function quickRow(t) {
     var bits = [];
-    if (t.modules.M29) bits.push(["grv", "Receive stock"]);
-    if (t.modules.M22) bits.push(["quote/new", "New quote"]);
+    if (t.modules.M29 && can(t, "M29", "C")) bits.push(["grv", "Receive stock"]);
+    if (t.modules.M22 && can(t, "M22", "C")) bits.push(["quote/new", "New quote"]);
     if (t.features && t.features.production) bits.push(["production", "Move a block"]);
     if (t.features && t.features.timesheets) bits.push(["timesheets", "Clock in"]);
     if (!bits.length) return "";
@@ -936,7 +1005,12 @@
   function shell(t, body) {
     var session = O.getSession();
     var who = session ? (session.name + (session.email ? " \u00b7 " + session.email : "")) : "";
+    var imp = O.ui && O.ui.impersonating && O.ui.impersonating.tenantId === t.id ? O.ui.impersonating : null;
+    var banner = imp
+      ? '<div class="preview-banner">Impersonating <strong>' + O.esc(imp.userName) + "</strong> · " + O.esc(imp.reason) + '<span class="spacer"></span><button class="btn btn-sm btn-secondary" type="button" data-act="stop-impersonate" data-id="' + t.id + '">Stop impersonating</button></div>'
+      : "";
     document.getElementById("app").innerHTML =
+      banner +
       '<div class="preview-shell phone-app">' +
       '<aside class="preview-side" style="background: linear-gradient(180deg, ' + O.esc(t.color || "#3B2F8F") + ' 0%, #0f172a 140%)">' +
       '<div class="brand"><div class="tile" style="background:rgba(255,255,255,0.15);width:36px;height:36px;border-radius:8px;display:grid;place-items:center">' +
@@ -960,12 +1034,12 @@
     if (window.OmnivateShop && window.OmnivateShop.ready) window.OmnivateShop.ready(t);
     var m = metrics(t);
     var tiles = [];
-    if (t.modules.M29) tiles.push({ href: "products", icon: "St", name: "Stock", desc: "Slabs and offcuts on hand", num: (t.books.products || []).length + " lines" });
-    if (t.modules.M29) tiles.push({ href: "grv", icon: "GR", name: "Goods received", desc: "Receipts that update stock", num: (t.books.grvs || []).length + " GRVs" });
-    if (t.modules.M22 || t.modules.M23) tiles.push({ href: "customers", icon: "Cu", name: "Customers", desc: "Fabricators, installers and retailers", num: String((t.books.customers || []).length) });
-    if (t.modules.M22) tiles.push({ href: "quotes", icon: "Qu", name: "Quotes", desc: "Open and sent quotations", num: m.openQ + " open" });
-    if (t.modules.M22 || t.modules.M17) tiles.push({ href: "invoices", icon: "In", name: "Invoices", desc: "Tax invoices with 15% VAT", num: (t.books.invoices || []).filter(function (i) { return i.status !== "Paid"; }).length + " unpaid" });
-    if (t.modules.M22 && (t.id === "granite-warehouse" || t.id === "top-quartz")) tiles.push({ href: "orders", icon: "SO", name: "Sales orders", desc: "Wholesale slab order book", num: m.openO + " open" });
+    if (t.modules.M29 && can(t, "M29", "R")) tiles.push({ href: "products", icon: "St", name: "Stock", desc: "Slabs and offcuts on hand", num: (t.books.products || []).length + " lines" });
+    if (t.modules.M29 && can(t, "M29", "R")) tiles.push({ href: "grv", icon: "GR", name: "Goods received", desc: "Receipts that update stock", num: (t.books.grvs || []).length + " GRVs" });
+    if ((t.modules.M22 || t.modules.M23) && (can(t, "M22", "R") || can(t, "M23", "R"))) tiles.push({ href: "customers", icon: "Cu", name: "Customers", desc: "Fabricators, installers and retailers", num: String((t.books.customers || []).length) });
+    if (t.modules.M22 && can(t, "M22", "R")) tiles.push({ href: "quotes", icon: "Qu", name: "Quotes", desc: "Open and sent quotations", num: m.openQ + " open" });
+    if ((t.modules.M22 || t.modules.M17) && (can(t, "M22", "R") || can(t, "M17", "R"))) tiles.push({ href: "invoices", icon: "In", name: "Invoices", desc: "Tax invoices with 15% VAT", num: (t.books.invoices || []).filter(function (i) { return i.status !== "Paid"; }).length + " unpaid" });
+    if (t.modules.M22 && can(t, "M22", "R") && (t.id === "granite-warehouse" || t.id === "top-quartz")) tiles.push({ href: "orders", icon: "SO", name: "Sales orders", desc: "Wholesale slab order book", num: m.openO + " open" });
     if (t.features && t.features.production) {
       var cutting = ((t.books.production && t.books.production.blocks) || []).filter(function (b) { return b.status === "Cutting"; }).length;
       tiles.push({ href: "production", icon: "Pr", name: "Production", desc: "Blocks, cutting and polishing", num: cutting + " cutting" });
@@ -984,7 +1058,7 @@
     var k = [
       ["Sales, Sep\u2013Nov", zar2(m.sales), "Incl. 15% VAT"],
       ["Debtors", zar2(m.debtors), "Unpaid, incl. VAT"],
-      ["Quotes open", String(m.openQ), "Draft and sent"],
+      ["Quotes open", String(m.openQ), "Draft, sent and accepted"],
       ["Stock value", zar2(m.stock), "At cost, excl. VAT"],
       ["Low stock", String(m.lows), "At or below reorder"]
     ];
@@ -1009,10 +1083,15 @@
 
   function customers(t) {
     var columns = cols(t, "M22", "Customers", CUST_MAP);
-    return '<div class="page-head"><div><h1>Customers</h1><p>Sample names are marked. Phone and email are blank for you to fill in.</p></div></div>' +
+    var editable = can(t, "M22", "U");
+    return '<div class="page-head"><div><h1>Customers</h1><p>Sample names are marked. Type a phone or email on the row — it is saved in this browser and used for WhatsApp.</p></div></div>' +
       '<div class="card">' + table(columns, t.books.customers, function (c) {
         return "<tr>" + columns.map(function (col) {
-          var html = col.key === "name" ? (O.esc(c.name) + (c.sample ? ' <span class="badge badge-neutral">Sample</span>' : "")) : cell(c, col.key);
+          var html;
+          if (col.key === "name") html = O.esc(c.name) + (c.sample ? ' <span class="badge badge-neutral">Sample</span>' : "");
+          else if ((col.key === "phone" || col.key === "email") && editable) {
+            html = '<input class="input" data-act="cust-field" data-id="' + t.id + '" data-cust="' + O.esc(c.id) + '" data-field="' + col.key + '" value="' + O.esc(c[col.key] || "") + '" placeholder="' + (col.key === "phone" ? "27…" : "name@company.co.za") + '">';
+          } else html = cell(c, col.key);
           return "<td>" + html + "</td>";
         }).join("") + "<td></td></tr>";
       }) + "</div>";
@@ -1020,7 +1099,7 @@
 
   function quotes(t) {
     var columns = cols(t, "M22", "Sales quotations", QUOTE_MAP);
-    return '<div class="page-head"><div><h1>Quotes</h1></div><div class="actions"><a class="btn btn-primary" href="#/preview/' + t.id + '/work/quote/new">New quote</a>' + cameraBtn(t) + "</div></div>" +
+    return '<div class="page-head"><div><h1>Quotes</h1></div><div class="actions">' + (can(t, "M22", "C") ? '<a class="btn btn-primary" href="#/preview/' + t.id + '/work/quote/new">New quote</a>' : "") + cameraBtn(t) + "</div></div>" +
       scanBar("Scan a product to start a quote line, or open a quote first.") +
       '<div class="card">' + table(columns, t.books.quotes, function (q) { return docRow(t, columns, q, "quote"); }) + "</div>";
   }
@@ -1031,16 +1110,16 @@
       '<div class="card">' + table(columns, t.books.invoices, function (q) { return docRow(t, columns, q, "invoice"); }) + "</div>";
   }
 
-  function lineEditor(t, lines) {
+  function lineEditor(t, lines, locked) {
     var opts = t.books.products.map(function (p) {
       return '<option value="' + O.esc(p.id) + '">' + O.esc(p.sku + " \u00b7 " + p.name) + "</option>";
     }).join("");
     var rows = (lines.length ? lines : [{ productId: t.books.products[0] && t.books.products[0].id, qty: 1, price: excl(t.books.products[0] && t.books.products[0].sellIncl) }]);
     return rows.map(function (l, i) {
-      return '<div class="line-edit" data-line><select class="select" name="product">' + opts.replace('value="' + l.productId + '"', 'value="' + l.productId + '" selected') + '</select>' +
-        '<input class="input" name="qty" type="number" min="0" step="1" value="' + (l.qty || 1) + '">' +
-        '<input class="input" name="price" type="number" min="0" step="0.01" value="' + (l.price || 0) + '" title="Unit price excl. VAT">' +
-        '<button type="button" class="btn btn-sm btn-secondary" data-act="drop-line" data-i="' + i + '">Remove</button></div>';
+      return '<div class="line-edit" data-line><select class="select" name="product"' + (locked ? " disabled" : "") + ">" + opts.replace('value="' + l.productId + '"', 'value="' + l.productId + '" selected') + "</select>" +
+        '<input class="input" name="qty" type="number" min="0" step="1" value="' + (l.qty || 1) + '"' + (locked ? " readonly" : "") + ">" +
+        '<input class="input" name="price" type="number" min="0" step="0.01" value="' + (l.price || 0) + '" title="Unit price excl. VAT"' + (locked ? " readonly" : "") + ">" +
+        (locked ? "" : '<button type="button" class="btn btn-sm btn-secondary" data-act="drop-line" data-i="' + i + '">Remove</button>') + "</div>";
     }).join("");
   }
   function captureDraft() {
@@ -1059,18 +1138,24 @@
   function docEditor(t, kind) {
     var tot = docTotals(draft.lines || []);
     var title = kind === "invoice" ? "Invoice" : "Quote";
+    var code = kind === "invoice" ? "M17" : "M22";
+    var canSave = draft.id ? can(t, code, "U") || (kind === "invoice" && can(t, "M22", "U")) : can(t, code, "C") || (kind === "invoice" && can(t, "M22", "C"));
+    var canConvert = can(t, "M22", "C") || can(t, "M17", "C");
     return scanBar("Scan a SKU to add a line. Prices are exclusive; VAT is 15%.") + cameraBtn(t) +
       '<form id="doc-form" data-act="save-doc" data-id="' + t.id + '" data-kind="' + kind + '">' +
-      '<div class="field"><label>Customer</label><select class="select" name="customer">' +
+      '<div class="field"><label>Customer</label><select class="select" name="customer"' + (canSave ? "" : " disabled") + ">" +
       t.books.customers.map(function (c) {
         return '<option value="' + c.id + '"' + (c.id === draft.customerId ? " selected" : "") + ">" + O.esc(c.name) + "</option>";
       }).join("") + "</select></div>" +
-      '<div id="doc-lines">' + lineEditor(t, draft.lines || []) + "</div>" +
-      '<button type="button" class="btn btn-sm btn-secondary" data-act="add-line" style="margin:8px 0">Add line</button>' +
-      '<div class="tiny">Subtotal ' + zar2(tot.sub) + " \u00b7 VAT 15% " + zar2(tot.vat) + " \u00b7 Total " + zar2(tot.total) + "</div>" +
+      '<div id="doc-lines">' + lineEditor(t, draft.lines || [], !canSave) + "</div>" +
+      (canSave ? '<button type="button" class="btn btn-sm btn-secondary" data-act="add-line" style="margin:8px 0">Add line</button>' : "") +
+      '<div class="tiny" id="doc-totals">Subtotal ' + zar2(tot.sub) + " \u00b7 VAT 15% " + zar2(tot.vat) + " \u00b7 Total " + zar2(tot.total) + "</div>" +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
-      '<button class="btn btn-primary" type="submit">Save ' + title.toLowerCase() + "</button>" +
-      (kind === "quote" && draft.id ? '<button class="btn btn-secondary" type="button" data-act="convert-quote" data-id="' + t.id + '" data-q="' + draft.id + '">Convert to invoice</button>' : "") +
+      (canSave ? '<button class="btn btn-primary" type="submit">Save ' + title.toLowerCase() + "</button>" : '<span class="tiny">Your role can view this ' + title.toLowerCase() + ".</span>") +
+      (kind === "quote" && draft.id && canSave && draft.status === "Draft" ? '<button class="btn btn-secondary" type="button" data-act="quote-status" data-id="' + t.id + '" data-status="Sent">Mark sent</button>' : "") +
+      (kind === "quote" && draft.id && canSave && (draft.status === "Draft" || draft.status === "Sent") ? '<button class="btn btn-secondary" type="button" data-act="quote-status" data-id="' + t.id + '" data-status="Accepted">Mark accepted</button>' : "") +
+      (kind === "quote" && draft.id && canConvert && draft.status !== "Converted" ? '<button class="btn btn-secondary" type="button" data-act="convert-quote" data-id="' + t.id + '" data-q="' + draft.id + '">Convert to invoice</button>' : "") +
+      (kind === "invoice" && draft.id && canSave && draft.status !== "Paid" ? '<button class="btn btn-secondary" type="button" data-act="mark-paid" data-id="' + t.id + '">Mark paid</button>' : "") +
       (draft.id ? '<button class="btn btn-secondary" type="button" data-act="wa-doc" data-id="' + t.id + '" data-kind="' + kind + '" data-doc="' + draft.id + '">Send via WhatsApp</button>' : "") +
       (draft.id ? '<button class="btn btn-secondary" type="button" data-act="pdf-doc" data-id="' + t.id + '" data-kind="' + kind + '" data-doc="' + draft.id + '">Print / Save as PDF</button>' : "") +
       "</div></form>" +
@@ -1095,7 +1180,7 @@
       '<div class="field"><label>Product</label><select class="select" name="product">' + opts + "</select></div>" +
       '<div class="field"><label>Qty received</label><input class="input" type="number" min="1" name="qty" value="1"></div>' +
       '<div class="field"><label>Cost each excl. VAT</label><input class="input" type="number" min="0" step="0.01" name="cost" value="0"></div>' +
-      "</div><button class=\"btn btn-primary\" type=\"submit\">Post GRV and update stock</button></div></form>";
+      "</div>" + (can(t, "M29", "C") ? "<button class=\"btn btn-primary\" type=\"submit\">Post GRV and update stock</button>" : "<p class=\"tiny\">Your role can view receipts. An administrator can post a GRV.</p>") + "</div></form>";
   }
   function orders(t) {
     if (!t.modules.M22) return '<div class="empty"><h3>Sales is turned off</h3><p>Enable the Sales module in the Control Centre.</p></div>';
@@ -1108,23 +1193,46 @@
     var s = screenName();
     var id = routeParts()[4];
     if (s === "products") {
-      if (t.modules.M29) return products(t);
-      return off("Inventory");
+      if (!t.modules.M29) return off("Inventory");
+      if (!can(t, "M29", "R")) return denied("Stock");
+      return products(t);
     }
-    if (s === "customers") return (t.modules.M22 || t.modules.M23) ? customers(t) : off("Sales");
-    if (s === "quotes") return t.modules.M22 ? quotes(t) : off("Sales");
+    if (s === "customers") {
+      if (!(t.modules.M22 || t.modules.M23)) return off("Sales");
+      if (!(can(t, "M22", "R") || can(t, "M23", "R"))) return denied("Customers");
+      return customers(t);
+    }
+    if (s === "quotes") {
+      if (!t.modules.M22) return off("Sales");
+      if (!can(t, "M22", "R")) return denied("Quotes");
+      return quotes(t);
+    }
     if (s === "quote") {
       if (!t.modules.M22) return off("Sales");
+      if (!can(t, "M22", "R")) return denied("Quotes");
+      if (id === "new" && !can(t, "M22", "C")) return denied("New quotes");
       openDraft(t, "quote", id);
-      return '<h1 style="font-size:20px;margin-bottom:8px">' + O.esc(draft.number || "New quote") + "</h1>" + docEditor(t, "quote");
+      return '<h1 style="font-size:20px;margin-bottom:8px">' + O.esc(draft.number || "New quote") + " <span class=\"badge badge-teal\">" + O.esc(draft.status || "Draft") + "</span></h1>" + docEditor(t, "quote");
     }
-    if (s === "invoices") return (t.modules.M22 || t.modules.M17) ? invoices(t) : off("Sales");
+    if (s === "invoices") {
+      if (!(t.modules.M22 || t.modules.M17)) return off("Sales");
+      if (!(can(t, "M22", "R") || can(t, "M17", "R"))) return denied("Invoices");
+      return invoices(t);
+    }
     if (s === "invoice") {
+      if (!(can(t, "M22", "R") || can(t, "M17", "R"))) return denied("Invoices");
       openDraft(t, "invoice", id);
-      return '<h1 style="font-size:20px;margin-bottom:8px">' + O.esc(draft.number || "Invoice") + "</h1>" + docEditor(t, "invoice");
+      return '<h1 style="font-size:20px;margin-bottom:8px">' + O.esc(draft.number || "Invoice") + " <span class=\"badge badge-teal\">" + O.esc(draft.status || "") + "</span></h1>" + docEditor(t, "invoice");
     }
-    if (s === "orders") return orders(t);
-    if (s === "grv") return t.modules.M29 ? grvView(t) : off("Inventory");
+    if (s === "orders") {
+      if (!can(t, "M22", "R")) return denied("Sales orders");
+      return orders(t);
+    }
+    if (s === "grv") {
+      if (!t.modules.M29) return off("Inventory");
+      if (!can(t, "M29", "R")) return denied("Goods received");
+      return grvView(t);
+    }
     if (s === "labels") return '<div class="page-head"><div><h1>Labels & printer</h1><p>Size, Bluetooth, USB and a test label for the M2-H.</p></div></div>' + labelPanel();
     if (window.OmnivateShop) {
       var shopHtml = window.OmnivateShop.body(t, s);
@@ -1134,6 +1242,9 @@
   }
   function off(name) {
     return '<div class="empty"><h3>' + name + ' is turned off</h3><p>Turn the module back on in the Control Centre and this screen returns.</p></div>';
+  }
+  function denied(name) {
+    return '<div class="empty"><h3>' + name + ' is hidden for this role</h3><p>An administrator can tick Read on the Users & roles matrix.</p></div>';
   }
   function openDraft(t, kind, id) {
     var list = kind === "invoice" ? t.books.invoices : t.books.quotes;
@@ -1146,9 +1257,11 @@
       return;
     }
     if (!draft || draft.kind !== kind || draft.id) {
+      var first = t.books.products[0];
       draft = {
         kind: kind, id: null, number: "", customerId: t.books.customers[0] && t.books.customers[0].id,
-        date: new Date().toISOString().slice(0, 10), status: kind === "invoice" ? "Unpaid" : "Draft", lines: []
+        date: new Date().toISOString().slice(0, 10), status: kind === "invoice" ? "Unpaid" : "Draft",
+        lines: first ? [{ productId: first.id, qty: 1, price: excl(first.sellIncl) }] : []
       };
     }
   }
@@ -1170,6 +1283,12 @@
   function saveDoc(t, kind) {
     captureDraft();
     if (!draft.lines.length) { O.toast("Add a line first", "warn"); return; }
+    var flag = draft.id ? "U" : "C";
+    var codes = kind === "invoice" ? ["M22", "M17"] : ["M22"];
+    if (!codes.some(function (code) { return can(t, code, flag); })) {
+      allow(t, codes[0], flag);
+      return;
+    }
     var list = kind === "invoice" ? t.books.invoices : t.books.quotes;
     if (!draft.id) {
       draft.id = O.uid(kind === "invoice" ? "inv" : "qt");
@@ -1179,7 +1298,12 @@
       list.unshift(draft);
     } else {
       var idx = list.findIndex(function (d) { return d.id === draft.id; });
-      if (idx >= 0) list[idx] = draft;
+      if (idx >= 0) {
+        if (kind === "invoice" && list[idx].stockApplied) adjustStock(t, list[idx].lines, draft.lines);
+        if (kind === "invoice") draft.stockApplied = list[idx].stockApplied || draft.stockApplied;
+        if (kind === "quote") draft.status = draft.status || list[idx].status || "Draft";
+        list[idx] = draft;
+      }
     }
     O.persist();
     O.pushAudit({ tenantId: t.id, action: (kind === "invoice" ? "Invoice" : "Quote") + " saved", target: draft.number, before: "\u2014", after: docTotals(draft.lines).total + " incl VAT" });
@@ -1196,7 +1320,30 @@
     });
     inv.stockApplied = true;
   }
+  function adjustStock(t, beforeLines, afterLines) {
+    var delta = {};
+    (beforeLines || []).forEach(function (l) {
+      delta[l.productId] = (delta[l.productId] || 0) + (Number(l.qty) || 0);
+    });
+    (afterLines || []).forEach(function (l) {
+      delta[l.productId] = (delta[l.productId] || 0) - (Number(l.qty) || 0);
+    });
+    Object.keys(delta).forEach(function (id) {
+      if (!delta[id]) return;
+      var p = prod(t, id);
+      if (p) p.onHand = round2((Number(p.onHand) || 0) + delta[id]);
+    });
+  }
   function convertQuote(t, qid) {
+    if (!can(t, "M22", "C") && !can(t, "M17", "C")) { allow(t, "M22", "C"); return; }
+    if (draft && draft.id === qid) {
+      captureDraft();
+      var current = t.books.quotes.find(function (x) { return x.id === qid; });
+      if (current) {
+        current.customerId = draft.customerId;
+        current.lines = draft.lines;
+      }
+    }
     var q = t.books.quotes.find(function (x) { return x.id === qid; });
     if (!q || q.status === "Converted") { O.toast("Already converted", "warn"); return; }
     var inv = {
@@ -1226,13 +1373,17 @@
   function openWa(t, doc) {
     var c = cust(t, doc.customerId);
     var phone = (c && c.phone) || "";
-    var typed = phone || window.prompt("Customer phone is blank. Enter a South African number (27\u2026) to open WhatsApp.", "27");
+    var typed = phone || window.prompt("Customer phone is blank. Enter a South African number (27\u2026) to open WhatsApp. It is saved on the customer.", "27");
     if (!typed) return;
     var n = String(typed).replace(/[^\d]/g, "");
     if (n.startsWith("0")) n = "27" + n.slice(1);
+    if (c && !c.phone) c.phone = n;
+    if (doc.status === "Draft") doc.status = "Sent";
+    O.persist();
     var url = "https://wa.me/" + n + "?text=" + encodeURIComponent(waText(t, doc));
     window.open(url, "_blank", "noopener");
     O.pushAudit({ tenantId: t.id, action: "WhatsApp opened", target: doc.number, before: "\u2014", after: n });
+    O.render();
   }
   var PUBLIC_BUSINESS = {
     "granite-warehouse": {
@@ -1488,7 +1639,29 @@
     });
   }
 
+  document.addEventListener("input", function (e) {
+    var form = e.target.closest && e.target.closest("#doc-form");
+    if (!form || !draft) return;
+    captureDraft();
+    var tot = docTotals(draft.lines || []);
+    var label = document.getElementById("doc-totals");
+    if (label) label.textContent = "Subtotal " + zar2(tot.sub) + " · VAT 15% " + zar2(tot.vat) + " · Total " + zar2(tot.total);
+    var preview = document.getElementById("biz-preview");
+    var t = O.getTenant(form.getAttribute("data-id"));
+    if (preview && t && draft.id) preview.innerHTML = renderBizDoc(t, salesDocSpec(t, draft, form.getAttribute("data-kind")));
+  });
   document.addEventListener("change", function (e) {
+    var custField = e.target.closest && e.target.closest("[data-act='cust-field']");
+    if (custField) {
+      var tc = O.getTenant(custField.getAttribute("data-id"));
+      var customer = tc && (tc.books.customers || []).find(function (c) { return c.id === custField.getAttribute("data-cust"); });
+      if (customer && allow(tc, "M22", "U")) {
+        customer[custField.getAttribute("data-field")] = custField.value.trim();
+        O.persist();
+        O.toast("Customer saved", "ok");
+      }
+      return;
+    }
     var el = e.target.closest && e.target.closest("[data-label-setting]");
     if (!el) return;
     var key = el.getAttribute("data-label-setting");
@@ -1546,12 +1719,16 @@
       };
       t.books.quotes.unshift(q);
     }
-    if ((q.lines || []).some(function (l) { return l.productId === p.id; })) {
-      O.toast("That slab is already on " + q.number, "warn");
+    q.lines = q.lines || [];
+    var heldElsewhere = openQuotedQty(t, p.id, q.id);
+    var onThis = q.lines.reduce(function (n, l) { return l.productId === p.id ? n + (Number(l.qty) || 0) : n; }, 0);
+    if (heldElsewhere + onThis + 1 > (Number(p.onHand) || 0)) {
+      O.toast("Not enough " + p.sku + " left to quote", "warn");
       return;
     }
-    q.lines = q.lines || [];
-    q.lines.push({ productId: p.id, qty: 1, price: excl(p.sellIncl) });
+    var existing = q.lines.find(function (l) { return l.productId === p.id; });
+    if (existing) existing.qty = (Number(existing.qty) || 0) + 1;
+    else q.lines.push({ productId: p.id, qty: 1, price: excl(p.sellIncl) });
     t.books.quoteFocus = q.id;
     O.persist();
     O.closeModal();
@@ -1562,6 +1739,8 @@
     var el = e.target;
     if (!el || !el.hasAttribute || !el.hasAttribute("data-scan-field")) return;
     if (el.getAttribute("inputmode") === "text") return;
+    var coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) return;
     el.setAttribute("readonly", "readonly");
     setTimeout(function () { el.removeAttribute("readonly"); }, 80);
   });
@@ -1572,7 +1751,11 @@
     renderWorkspace();
     return true;
   };
-  O.ext.afterReset = function () { draft = null; hit = { kind: "", id: "" }; };
+  O.ext.afterReset = function () {
+    draft = null;
+    hit = { kind: "", id: "" };
+    try { localStorage.removeItem(LABEL_SERIAL_KEY); } catch (err) { /* private mode */ }
+  };
   O.ext.act = function (act, el) {
     var id = el.getAttribute("data-id");
     if (act === "phone-more") {
@@ -1707,11 +1890,51 @@
     }
     if (act === "order-flag") {
       var tf = O.getTenant(id);
+      if (tf && !allow(tf, "M22", "U")) { el.checked = !el.checked; return true; }
       var order = tf && (tf.books.orders || []).find(function (x) { return x.id === el.getAttribute("data-order"); });
       if (order) {
         order[el.getAttribute("data-flag")] = el.checked;
         O.persist();
       }
+      return true;
+    }
+    if (act === "quote-status") {
+      var tstat = O.getTenant(id);
+      if (!tstat || !draft) return true;
+      if (!allow(tstat, "M22", "U")) return true;
+      captureDraft();
+      var next = el.getAttribute("data-status");
+      draft.status = next;
+      var saved = (tstat.books.quotes || []).find(function (q) { return q.id === draft.id; });
+      if (saved) {
+        saved.status = next;
+        saved.customerId = draft.customerId;
+        saved.lines = draft.lines;
+      }
+      O.persist();
+      O.pushAudit({ tenantId: tstat.id, action: "Quote " + next.toLowerCase(), target: draft.number, before: "—", after: next });
+      O.toast(draft.number + " marked " + next, "ok");
+      O.render();
+      return true;
+    }
+    if (act === "mark-paid") {
+      var tpay = O.getTenant(id);
+      if (!tpay || !draft) return true;
+      if (!can(tpay, "M22", "U") && !can(tpay, "M17", "U")) { allow(tpay, "M22", "U"); return true; }
+      captureDraft();
+      draft.status = "Paid";
+      var inv = (tpay.books.invoices || []).find(function (d) { return d.id === draft.id; });
+      if (inv) {
+        if (inv.stockApplied) adjustStock(tpay, inv.lines, draft.lines);
+        inv.customerId = draft.customerId;
+        inv.lines = draft.lines;
+        inv.status = "Paid";
+        draft.stockApplied = inv.stockApplied;
+      }
+      O.persist();
+      O.pushAudit({ tenantId: tpay.id, action: "Invoice marked paid", target: draft.number, before: "Unpaid", after: "Paid" });
+      O.toast(draft.number + " marked paid", "ok");
+      O.render();
       return true;
     }
     if (act === "add-line") {
@@ -1731,8 +1954,14 @@
     if (act === "convert-quote") { convertQuote(O.getTenant(id), el.getAttribute("data-q")); return true; }
     if (act === "wa-doc") {
       var tw = O.getTenant(id);
+      captureDraft();
       var list = el.getAttribute("data-kind") === "invoice" ? tw.books.invoices : tw.books.quotes;
       var doc = list.find(function (d) { return d.id === el.getAttribute("data-doc"); });
+      if (doc && draft && draft.id === doc.id) {
+        doc.customerId = draft.customerId;
+        doc.lines = draft.lines;
+        doc.status = draft.status || doc.status;
+      }
       if (doc) openWa(tw, doc);
       return true;
     }
@@ -1770,11 +1999,12 @@
     if (act === "save-grv") {
       var tg = O.getTenant(form.getAttribute("data-id"));
       ensureBooks(tg);
+      if (!allow(tg, "M29", "C")) return true;
       var val = function (n) { return form.elements[n] ? form.elements[n].value : ""; };
       var qty = Math.max(1, Number(val("qty")) || 1);
       var grv = {
         id: O.uid("grv"),
-        number: (tg.id === "granite-warehouse" ? "GW" : "TQ") + "-GRV-" + (1000 + (tg.books.grvs.length + 1)),
+        number: labelPrefix(tg) + "-GRV-" + (1000 + (tg.books.grvs.length + 1)),
         supplier: val("supplier") || "Sample supplier",
         date: val("date") || new Date().toISOString().slice(0, 10),
         posted: true,

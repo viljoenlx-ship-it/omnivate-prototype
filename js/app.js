@@ -1118,10 +1118,12 @@
     for (const c of cols) if (!order.includes(c.id)) order.push(c.id);
     const hidden = new Set(ov.hidden || []);
     const names = ov.names || {};
+    const hiddenSections = new Set((((tenant.sectionOverrides || {})[key] || {}).hidden) || []);
     return order.map((id, i) => {
       const c = byId[id];
       if (!c) return null;
-      return Object.assign({}, c, { visible: !hidden.has(id), displayName: names[id] || c.name, order: i });
+      const sectionHidden = hiddenSections.has(sectionForColumn(c));
+      return Object.assign({}, c, { visible: !hidden.has(id) && !sectionHidden, displayName: names[id] || c.name, order: i });
     }).filter(Boolean);
   }
   function applyTerm(tenant, label) {
@@ -1427,7 +1429,14 @@
     if (gs) {
       gs.addEventListener("input", (e) => {
         ui.fleetQuery = e.target.value;
-        if (parseHash().view === "fleet") navigate("#/fleet");
+        const caret = e.target.selectionStart;
+        if (parseHash().view === "fleet") {
+          render({ keepScroll: true, focusSel: "#global-search" });
+          const again = document.getElementById("global-search");
+          if (again && typeof caret === "number") {
+            try { again.setSelectionRange(caret, caret); } catch (err) { /* ignore */ }
+          }
+        }
       });
       gs.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && ui.fleetQuery.trim()) navigate("#/fleet");
@@ -1777,12 +1786,12 @@
   }
   function renderColumnsTab(t) {
     const enabled = enabledModules(t);
-    const mid = ui.colModule[t.id] || (t.id === "granite-warehouse" ? "M22" : enabled[0] && enabled[0].code) || "M22";
+    const mid = ui.colModule[t.id] || ((t.id === "granite-warehouse" || t.id === "top-quartz") ? "M22" : enabled[0] && enabled[0].code) || "M22";
     let screens = screensFor(mid);
-    if (t.id === "granite-warehouse" && mid === "M22" && !screens.some((s) => s.name === "Slab orders")) {
-      screens = screens.concat([{ name: "Slab orders", type: "List grid", columnCount: SLAB_ORDER_COLS.length, purpose: "Wholesale slab and offcut orders. Hiding a column here removes it from the client grid." }]);
+    if ((t.id === "granite-warehouse" || t.id === "top-quartz") && mid === "M22" && !screens.some((s) => s.name === "Slab orders")) {
+      screens = screens.concat([{ name: "Slab orders", type: "List grid", columnCount: SLAB_ORDER_COLS.length, purpose: "Wholesale slab and offcut orders. Hiding, renaming or reordering a column here updates the client sales-order grid." }]);
     }
-    if (!ui.colScreen[t.id] && t.id === "granite-warehouse" && mid === "M22") ui.colScreen[t.id] = "Slab orders";
+    if (!ui.colScreen[t.id] && (t.id === "granite-warehouse" || t.id === "top-quartz") && mid === "M22") ui.colScreen[t.id] = "Slab orders";
     const sid = ui.colScreen[t.id] || screens[0] && screens[0].name || "";
     const q = (ui.colSearch[t.id] || "").toLowerCase();
     const mode = ui.colMode[t.id] || "grid";
@@ -2064,7 +2073,7 @@
           <tbody>
             ${(c.dsar || []).map((d) => `<tr>
               <td>${esc(d.type)}</td><td>${esc(d.subject)}</td>
-              <td><span class="badge ${d.status === "Closed" ? "badge-success" : "badge-warning"}">${esc(d.status)}</span></td>
+              <td><span class="badge ${d.status === "Closed" ? "badge-success" : "badge-warning"}">${esc(d.status)}</span>${d.status === "Closed" ? "" : ` <button class="btn btn-sm btn-secondary" data-act="close-dsar" data-id="${t.id}" data-dsar="${esc(d.id)}">Close</button>`}</td>
               <td class="tiny">${fmtDate(d.received, false)}</td>
             </tr>`).join("") || `<tr><td colspan="4" class="muted">No requests logged.</td></tr>`}
           </tbody>
@@ -2530,13 +2539,10 @@
     let reply = "";
     const toggle = lower.match(/^(turn|switch|set|enable|disable)\s+(on|off)?\s*(.+?)\s+(for|on|at)\s+(.+)$/i) || lower.match(/^(enable|disable|turn on|turn off)\s+(.+?)\s+(for|on|at)\s+(.+)$/i);
     if (toggle) {
-      const phrase = raw;
-      const on = /on|enable/i.test(phrase) && !/turn off|disable|switch off/i.test(phrase);
-      const off = /off|disable/i.test(phrase);
-      const wantOn = off ? false : true;
-      const parts = raw.split(/\s+(?:for|on|at)\s+/i);
-      const left = parts[0].replace(/^(turn|switch|set|enable|disable)\s+(on|off)?\s*/i, "").trim();
-      const right = parts.slice(1).join(" ");
+      const second = /^(enable|disable|turn on|turn off)\s+/i.test(raw) && toggle[1] && /enable|disable|turn/.test(toggle[1]) && !toggle[5];
+      const wantOn = second ? !/off|disable/i.test(toggle[1]) : toggle[2] !== "off" && !/^disable/i.test(toggle[1]);
+      const left = (second ? toggle[2] : toggle[3] || "").trim();
+      const right = (second ? toggle[4] : toggle[5] || "").trim();
       const mod = findModuleByName(left);
       const ten = findTenantByName(right);
       if (mod && ten) {
@@ -2650,12 +2656,13 @@
     s1();
     document.querySelectorAll("[data-mig-src]").forEach((btn) => btn.onclick = () => {
       window.__mig.source = btn.getAttribute("data-mig-src");
+      const showDest = () => {
       step(
         2,
         "Choose the destination tenant",
         `
       <div class="field"><label>Tenant</label>
-        <select class="select" id="mig-tenant">${state.tenants.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>
+        <select class="select" id="mig-tenant">${state.tenants.map((t) => `<option value="${t.id}" ${t.id === window.__mig.tenantId ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>
       </div>
       <p class="tiny">Company records, VAT numbers and opening balances will be mapped. Nothing is overwritten until you confirm on the last step.</p>`,
         `<button class="btn btn-secondary" id="mig-back">Back</button><button class="btn btn-primary" id="mig-next">Continue</button>`
@@ -2673,8 +2680,7 @@
         <p class="tiny">Source: ${esc(window.__mig.source)} \u2192 ${esc(t.name)}</p>`,
           `<button class="btn btn-secondary" id="mig-back2">Back</button><button class="btn btn-primary" id="mig-start">Start mock migration</button>`
         );
-        document.getElementById("mig-back2").onclick = () => document.getElementById("mig-next") ? null : openMigrateWizard();
-        document.getElementById("mig-back2").onclick = openMigrateWizard;
+        document.getElementById("mig-back2").onclick = showDest;
         document.getElementById("mig-start").onclick = () => {
           step(4, "Migration running (mock)", `
           <div class="empty">
@@ -2708,6 +2714,8 @@
           }, 450);
         };
       };
+      };
+      showDest();
     });
   }
   function openNewTenant() {
@@ -2985,7 +2993,7 @@
         <div id="wa-status" class="tiny" style="text-align:right;margin-top:8px;color:#667781">Sending\u2026</div>
       </div>
     </div>
-    <div class="modal-f"><button class="btn btn-primary" data-act="close-modal" id="wa-done" disabled>Close</button></div>`);
+    <div class="modal-f"><a class="btn btn-teal" id="wa-open" href="https://wa.me/${String(to).replace(/\D/g, "")}?text=${encodeURIComponent(body)}" target="_blank" rel="noopener">Open WhatsApp</a><button class="btn btn-primary" data-act="close-modal" id="wa-done" disabled>Close</button></div>`);
     const ticks = document.getElementById("wa-ticks");
     const status = document.getElementById("wa-status");
     const done = document.getElementById("wa-done");
@@ -3367,6 +3375,24 @@
     if (act === "add-dsar") {
       e.preventDefault();
       openAddDsar(id);
+      return;
+    }
+    if (act === "close-dsar") {
+      e.preventDefault();
+      const dsarId = el.getAttribute("data-dsar");
+      patchTenant(id, (x) => {
+        const row = ((x.compliance && x.compliance.dsar) || []).find((d) => d.id === dsarId);
+        if (row) row.status = "Closed";
+      }, { tenantId: id, action: "DSAR closed", target: dsarId, before: "Open", after: "Closed" });
+      toast("Request closed", "ok");
+      render({ keepScroll: true });
+      return;
+    }
+    if (act === "stop-impersonate") {
+      e.preventDefault();
+      ui.impersonating = null;
+      toast("Impersonation ended", "ok");
+      navigate(id ? "#/tenants/" + id + "/users" : "#/users");
       return;
     }
     if (act === "change-plan") {
