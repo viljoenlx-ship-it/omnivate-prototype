@@ -519,7 +519,11 @@
     return n;
   }
   function entitlement(time, emp, type, today) {
-    if (type.id === "annual") return round2(monthsWorked(emp.startDate || "2026-03-01", today) * (type.monthly || 1.25));
+    if (type.id === "annual") {
+      var perMonth = Number(type.monthly);
+      if (!(perMonth > 0)) perMonth = (Number(type.days) || 15) / 12;
+      return round2(monthsWorked(emp.startDate || "2026-03-01", today) * perMonth);
+    }
     if (type.id === "maternity") return (type.months || 4) + " months";
     if (type.days) return type.days;
     return "—";
@@ -996,6 +1000,7 @@
           var paid = form.elements["paid-" + tp.id];
           if (days) tp.days = Number(days.value) || 0;
           if (paid) tp.paid = !!paid.checked;
+          if (tp.id === "annual") tp.monthly = round2((tp.days || 0) / 12);
         });
         O.persist();
         O.toast("Leave rules saved", "ok");

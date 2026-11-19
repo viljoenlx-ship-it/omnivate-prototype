@@ -309,7 +309,7 @@
           terminology: { Customer: "Customer", Supplier: "Supplier", Item: "Product", Employee: "Employee" },
           sequences: [
             { doc: "Sales quotation", prefix: "TQ-QT-", pad: 4, next: 1047 },
-            { doc: "Sales invoice", prefix: "TQ-INV-", pad: 4, next: 2206 }
+            { doc: "Sales invoice", prefix: "TQ-INV-", pad: 4, next: 2210 }
           ],
           templates: { invoice: "Top Quartz tax invoice", quote: "Top Quartz quotation", statement: "Standard statement", payslip: "Standard payslip" }
         },
@@ -346,7 +346,7 @@
           terminology: { Customer: "Customer", Supplier: "Supplier", Item: "Slab", Employee: "Employee" },
           sequences: [
             { doc: "Sales quotation", prefix: "GW-QT-", pad: 4, next: 881 },
-            { doc: "Sales invoice", prefix: "GW-INV-", pad: 4, next: 1544 }
+            { doc: "Sales invoice", prefix: "GW-INV-", pad: 4, next: 1547 }
           ],
           templates: { invoice: "Granite Warehouse tax invoice", quote: "Granite Warehouse quotation", statement: "Standard statement", payslip: "Standard payslip" }
         },
@@ -801,11 +801,11 @@
     return tenants;
   }
   var STAFF_SEED = [
-    { id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner", title: "Founder", access: "all", canImpersonate: true, status: "Active", mfa: true },
-    { id: "u-thandi", name: "Thandi Mokoena", email: "thandi.mokoena@omnivate.co.za", role: "Customer success", title: "CS lead", access: "assigned", assigned: ["horizon", "naledi", "khaya", "umuzi"], canImpersonate: true, status: "Active", mfa: true },
-    { id: "u-johan", name: "Johan Botha", email: "johan.botha@omnivate.co.za", role: "Support engineer", title: "Support", access: "all", canImpersonate: true, status: "Active", mfa: true },
-    { id: "u-ayesha", name: "Ayesha Patel", email: "ayesha.patel@omnivate.co.za", role: "Onboarding specialist", title: "Onboarding", access: "assigned", assigned: ["greenfield", "cape-coast"], canImpersonate: false, status: "Active", mfa: true },
-    { id: "u-sipho", name: "Sipho Dlamini", email: "sipho.dlamini@omnivate.co.za", role: "DevOps", title: "Platform", access: "all", canImpersonate: false, status: "Active", mfa: true }
+    { id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner", title: "Founder", access: "all", canImpersonate: true, status: "Active", mfa: true, password: "Demo@123" },
+    { id: "u-thandi", name: "Thandi Mokoena", email: "thandi.mokoena@omnivate.co.za", role: "Customer success", title: "CS lead", access: "assigned", assigned: ["horizon", "naledi", "khaya", "umuzi"], canImpersonate: true, status: "Active", mfa: true, password: "Demo@123" },
+    { id: "u-johan", name: "Johan Botha", email: "johan.botha@omnivate.co.za", role: "Support engineer", title: "Support", access: "all", canImpersonate: true, status: "Active", mfa: true, password: "Demo@123" },
+    { id: "u-ayesha", name: "Ayesha Patel", email: "ayesha.patel@omnivate.co.za", role: "Onboarding specialist", title: "Onboarding", access: "assigned", assigned: ["greenfield", "cape-coast"], canImpersonate: false, status: "Active", mfa: true, password: "Demo@123" },
+    { id: "u-sipho", name: "Sipho Dlamini", email: "sipho.dlamini@omnivate.co.za", role: "DevOps", title: "Platform", access: "all", canImpersonate: false, status: "Active", mfa: true, password: "Demo@123" }
   ];
   function seedAudit(tenants) {
     return [
@@ -1313,6 +1313,7 @@
   function matchAccount(email, password) {
     const em = String(email || "").trim().toLowerCase();
     if (!em) return { error: "Enter the email address" };
+    if (!password) return { error: "Enter the password" };
     for (const t of state.tenants) {
       const u = (t.users || []).find((x) => String(x.email || "").toLowerCase() === em);
       if (!u) continue;
@@ -1321,11 +1322,11 @@
       return { kind: "tenant", tenantId: t.id, id: u.id, name: u.name, email: u.email, role: u.role };
     }
     const staff = (state.staff || []).find((s) => String(s.email || "").toLowerCase() === em);
-    const ownerish = !!staff || em === "liam@omnivate" || em.endsWith("@omnivate.co.za");
-    if (ownerish) {
-      if (!password) return { error: "Enter the password" };
-      const person = staff || { id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner" };
-      return { kind: "owner", id: person.id, name: person.name, email: person.email || em, role: person.role || "Owner" };
+    if (staff || em === "liam@omnivate") {
+      const person = staff || { id: "u-liam", name: "Liam Viljoen", email: "liam@omnivate.co.za", role: "Owner", password: "Demo@123" };
+      const pw = person.password || "Demo@123";
+      if (password !== pw) return { error: "Incorrect password" };
+      return { kind: "owner", id: person.id, name: person.name, email: person.email || "liam@omnivate.co.za", role: person.role || "Owner" };
     }
     return { error: "Unknown account. Use one of the demo logins on this screen." };
   }
@@ -2420,7 +2421,9 @@
   }
   var scanTimer = null;
   var scanStream = null;
+  var scanGen = 0;
   function stopScanner() {
+    scanGen += 1;
     if (scanTimer) {
       clearInterval(scanTimer);
       scanTimer = null;
@@ -2433,11 +2436,17 @@
   function startBarcodeCamera(tenantId) {
     const video = document.getElementById("scan-video");
     const status = document.getElementById("scan-status");
+    const gen = scanGen;
+    if (!video || !status) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       status.textContent = "Camera APIs are not available here. Use a sample SKU or type a barcode.";
       return;
     }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then((stream) => {
+      if (gen !== scanGen || !document.body.contains(video)) {
+        stream.getTracks().forEach((tr) => tr.stop());
+        return;
+      }
       scanStream = stream;
       video.srcObject = stream;
       video.style.display = "block";
@@ -2860,14 +2869,23 @@
     </div>`);
     document.getElementById("is-go").onclick = () => {
       const name = document.getElementById("is-name").value.trim() || "New staff";
-      const email = document.getElementById("is-email").value.trim() || "staff@omnivate.co.za";
+      const email = document.getElementById("is-email").value.trim().toLowerCase();
       const role = document.getElementById("is-role").value.trim() || "Support";
       const access = document.getElementById("is-access").value;
       const canImpersonate = document.getElementById("is-imp").checked;
-      state.staff.push({ id: uid("st"), name, email, role, title: role, access, assigned: [], canImpersonate, status: "Invited", mfa: false });
+      if (!email.includes("@")) {
+        toast("Enter an email address", "warn");
+        return;
+      }
+      const taken = (state.staff || []).some((s) => String(s.email || "").toLowerCase() === email) || state.tenants.some((tt) => (tt.users || []).some((u) => String(u.email || "").toLowerCase() === email));
+      if (taken) {
+        toast("That email is already in use", "warn");
+        return;
+      }
+      state.staff.push({ id: uid("st"), name, email, role, title: role, access, assigned: [], canImpersonate, status: "Invited", mfa: true, password: "Demo@123" });
       pushAudit({ tenantId: state.tenants[0].id, action: "Staff invited", target: name, before: "\u2014", after: role + " \xB7 " + access });
       closeModal();
-      toast("Staff invite sent to " + email + " (mock)", "ok");
+      toast(name + " can sign in as " + email + " with Demo@123", "ok");
       render();
     };
   }
